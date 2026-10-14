@@ -72,3 +72,12 @@ This document records all architectural choices, assumptions, and key decisions 
 - **50-Seed Ablation Proof**: Over 50 randomized seeds on `mission_hard_decoys` ($\text{noise\_scale}=1.5$, 2 decoys, $15\%$ spoof rate):
   - Naive Agent ($\epsilon=0.0$): 62.0% Success Rate, 2.03 cells mean error.
   - Robust Agent ($\epsilon=0.15$): **92.0% Success Rate** (+30.0% gain), **1.26 cells mean error** (median 0.00 cells), 94.0% status accuracy (+20.0% gain), and 0.0% stranded rate.
+
+## Phase 10: Bonus B - Benchmark & Baseline Comparison
+- **Automated Randomized Mission Generator**: Generates $N$ reproducible benchmark missions sampling grid sizes $12 \times 12$ to $24 \times 24$, obstacle densities $0.04$ to $0.16$, battery capacities $60$ to $120$, and sensor noise scales $0.8$ to $1.5$.
+- **Fair Head-to-Head Architecture Evaluation**: Tested `RandomAgent`, `GreedyBearingAgent`, and `BayesPlannerAgent` against identical worlds, ground truths, and initial signals.
+- **Artifact Pipeline**: Exports raw metrics to `outputs/benchmark/benchmark_results.csv`, synthesizes `outputs/benchmark/benchmark_summary.md`, and renders a publication-quality 4-panel visual chart `outputs/benchmark/benchmark_chart.png`.
+- **100-Mission Benchmark Findings**:
+  - `BayesPlannerAgent` achieved a **98.0% success rate** with **0.26 cells mean error** (median 0.00 cells) and **100.0% status accuracy**, compared to 6.0% for greedy bearing pursuit and 3.0% for random exploration.
+  - Resource conservation: `BayesPlannerAgent` consumed an average of only **36.3 battery units** and **32.5 steps**, while non-Bayesian baselines wandered in loops exceeding 860+ energy units.
+  - 0% stranded invariant preserved unconditionally across all 3 architectures.

@@ -81,8 +81,14 @@ def main(args: list[str] | None = None) -> int:
         print(f"Saved animated GIF:  {gif_p}\n")
         return 0
 
-    print(f"WALL-E CLI: command '{parsed_args.command}' called.")
-    return 0
+    if parsed_args.command == "benchmark":
+        from walle.benchmark import run_benchmark
+        run_benchmark(
+            n_missions=parsed_args.n,
+            base_seed=parsed_args.seed,
+            out_dir=parsed_args.out,
+        )
+        return 0
 
 
 if __name__ == "__main__":
