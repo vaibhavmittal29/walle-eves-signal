@@ -19,3 +19,10 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Connectivity Guarantee**: In random mode, world generation uses BFS to check 4-connected reachability from `start`. If isolated pockets are formed by random wall placement, derived seeds are tried up to 50 times.
 - **Clue Ground Truth**: Clues are pre-placed on free reachable cells (never on start, chargers, or walls) and ground-truth values are computed based on true EVE state.
 - **Strict Separation Enforced**: `PublicMissionInfo` strictly separates agent-visible data from hidden `GroundTruth`. Verified by AST analysis in `test_separation.py`.
+
+## Phase 2: Signal Model & Environment API
+- **Action Set**: `MOVE_N/E/S/W`, `SCAN_SIGNAL`, `SCAN_AREA(r)`, `RECHARGE`, `DECLARE(x,y,status)`.
+- **Wall Bumps**: Move attempts into obstacles or boundaries deduct battery and time, leave position unchanged, and set `bumped=True`.
+- **Recharge Mechanics**: Only allowed while standing on a charger cell. Off-charger attempts fail (`action_succeeded=False`) but consume time.
+- **Clue Discovery**: Revealed clues are remembered in environment state so subsequent scans return them deterministically without re-rolling detection probabilities.
+- **Termination Invariants**: Mission ends upon `DECLARE`, `stranded` (battery reaches 0 while off-charger), or `timeout` (time budget exhausted or max steps ceiling exceeded).
