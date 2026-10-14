@@ -543,4 +543,426 @@ Sections:
 ---
 
 ### Phase 0 — Project scaffold and ground rules (≈ 30 min)
-...
+
+**Goal:** Empty but runnable package, tooling, docs skeleton.
+
+**Tasks**
+- Create the repo tree in Section 4 with empty modules containing docstrings only.
+- `requirements.txt`: `numpy`, `pyyaml`, `matplotlib`, `pillow`, `imageio`, `pytest`.
+- `pyproject.toml` so `pip install -e .` works; `python -m walle --help` prints a help text.
+- `docs/DECISIONS.md` (decision log) and `docs/DESIGN.md` (to be filled later).
+- `.gitignore`, `git init`, first commit.
+- `geometry.py`: `distance(a, b)`, `bearing(a, b)` (compass, 0 = N), `wrap_angle(delta)` into (−180, 180], plus tests for 8 compass directions and wrap-around.
+
+**Acceptance criteria**
+- `pip install -r requirements.txt` works in a fresh venv.
+- `pytest -q` passes (geometry tests only).
+- `python -m walle --help` works.
+
+**Antigravity prompt**
+```text
+Start Phase 0 from PLAN.md. Create the full repo skeleton from Section 4, requirements.txt,
+pyproject.toml (src layout), .gitignore, docs/DECISIONS.md, and implement geometry.py
+(distance, bearing with compass convention 0=North, wrap_angle) with tests covering N/E/S/W,
+the four diagonals, and the 359->1 degree wrap. Add a minimal cli.py with argparse and a
+--help text. Run pytest and show me the output. Then stop.
+```
+
+---
+
+### Phase 1 — Config schema and world generation (≈ 1.5 h)
+
+**Goal:** Load and validate a mission config, then build the hidden world from the seed.
+
+**Tasks**
+- `config.py`: dataclasses mirroring the YAML in 5.1, `load_config(path)`, `validate(cfg)`, helpful `ConfigError` messages, defaults for omitted fields.
+- `world.py`:
+  - generate obstacles (`random` / `explicit` / `ascii`), ensure connectivity with BFS (retry with derived seeds);
+  - place chargers, EVE (random free reachable cell at least 8 cells from start by default), status, clues (random free reachable cells, not on start/charger/EVE), decoys;
+  - expose `World` with **private** ground-truth fields and a `public_info()` method that returns `PublicMissionInfo`.
+- Write `configs/mission_easy.yaml` (small 12×12 grid, few walls, strong initial signal, 1 charger), `mission_medium.yaml` (the default 20×20 example) and `CONFIG_REFERENCE.md` describing every field.
+
+**Acceptance criteria**
+- Invalid configs produce a readable error (test at least 6 invalid cases).
+- Same seed gives an identical world; different seeds give different worlds.
+- Every free cell is reachable from the start; EVE and clues are never in walls.
+- `public_info()` contains no hidden truth (assert in a test).
+
+**Antigravity prompt**
+```text
+Start Phase 1 from PLAN.md (sections 5.1, 5.3 and 6/Phase 1). Implement config.py,
+world.py, observations.py (dataclasses only), the three YAML files and CONFIG_REFERENCE.md.
+Hidden truth must live only inside World private attributes. Write tests: invalid configs,
+seed determinism, connectivity, hidden-truth-not-in-public-info. Show me an ASCII print of
+the generated medium world (with truth marked) as a debug helper in world.py. Stop after tests pass.
+```
+
+---
+
+### Phase 2 — Signal model and environment API (≈ 2 h)
+
+**Goal:** A working simulator: `reset()` and `step(action)` return observations; costs and rules are enforced.
+
+**Tasks**
+- `actions.py`: `ActionType` enum + `Action` dataclass (`type`, optional `radius`, optional `declare_x/y/status`) and `cost_of(action, costs)`.
+- `signal_model.py` (forward model part): `expected_strength(d, status)`, `sample_signal(...)`, `sample_clue_value(...)` as in 5.4, with a helper `noise_scale`.
+- `environment.py`: class `Environment(config)` with:
+  - `reset() -> (PublicMissionInfo, Observation)` (includes the initial signal as given in the config);
+  - `step(action) -> Observation` implementing movement/bump, scanning, clue reveal with detect probability, recharge-only-on-charger, battery and time accounting, termination reasons, a stranded rule, forced declare on timeout;
+  - `ground_truth()` for the runner and report only (documented as "never pass to the agent").
+- Clues are revealed **only** if within the scan radius and detected; revealed clues are remembered by the env (`revealed` set) so repeated scans return them again without extra detection rolls.
+
+**Acceptance criteria**
+- Moving into a wall costs resources and keeps position, with `bumped = True`.
+- Battery/time never go negative; `RECHARGE` off-charger is rejected (`action_succeeded=False`, cost still applies, documented).
+- Statistics test: with 2000 samples at a fixed distance, the mean strength matches `mu(d, k)` within 3 standard errors.
+- Scan at distance exactly beyond the radius never reveals a clue; inside the radius reveals roughly 90% of the time.
+- Same seed and the same action list give the same observations.
+
+**Antigravity prompt**
+```text
+Start Phase 2 from PLAN.md (5.2, 5.4, Phase 2). Implement actions.py, signal_model.py
+(forward model only), environment.py. Enforce all rules from the spec: costs, bump, charger-only
+recharge, termination reasons, stranded, forced declare on timeout, clue reveal by scan radius with
+detect probability. Add tests for each rule plus statistical tests of the sensor model with a fixed
+seed. Add a tiny script scripts/manual_play.py that lets me type actions in the terminal and prints
+observations so I can feel the environment. Stop after tests pass.
+```
+
+---
+
+### Phase 3 — Belief engine (≈ 2 h)
+
+**Goal:** Correct Bayesian inference over `(x, y, status)`.
+
+**Tasks**
+- `signal_model.py` (inference part): likelihood builders from 5.5, vectorized over the grid, with robust mixture support.
+- `belief.py`: the `Belief` class from 5.6 including KL information gain, entropy, MAP, mean, `mass_within`, `credible_region`, `second_mode`, `snapshot`, and the contradiction fallback.
+- Helper `apply_observation(belief, obs, agent_pos, info)` that picks the right builders for a signal reading, dropout, or clue readings and updates in the right order.
+- Initial belief: uniform on free cells × status prior, then the initial-signal observation applied at the start cell.
+
+**Acceptance criteria (the tests that prove it works)**
+- Belief always sums to 1 within 1e-9 and is exactly 0 on walls.
+- With **noise-free** synthetic observations from 3 different positions, the MAP equals the true cell.
+- With realistic noise, after 6 signal scans from spread-out positions, the median error over 50 seeds is ≤ 2 cells.
+- Entropy never increases on average after an informative observation (statistically, over many trials).
+- Dropouts shift probability toward `damaged` / `low_power` after repeated dropouts (test).
+- Status clue with accuracy 0.8 moves the status marginal in the expected direction.
+- A deliberately wrong (decoy) bearing with `ε = 0.15` does not collapse the belief to zero mass on the truth (robust test).
+
+**Antigravity prompt**
+```text
+Start Phase 3 from PLAN.md (5.5, 5.6, Phase 3). Implement the likelihood builders in
+signal_model.py and the Belief class in belief.py exactly as specified, vectorized with NumPy.
+Write the tests listed under Phase 3 acceptance criteria. Also create a notebook-free demo script
+scripts/belief_demo.py that simulates a few scans and saves a PNG with 4 panels showing the belief
+heatmap after 0, 1, 3 and 6 scans (truth marked) so I can visually confirm it converges. Stop after tests pass.
+```
+
+---
+
+### Phase 4 — Planner, safe return and information gain (≈ 2 h)
+
+**Goal:** All "thinking tools" for the agent, tested separately.
+
+**Tasks**
+- `planner.py`: BFS distance maps, shortest paths, nearest charger, `return_reserve`, `is_safe(action_plan, state)` implementing the invariant in 5.7.
+- `info_gain.py`: `eig_signal(belief, position, rng, info)` Monte-Carlo as in 5.8 and `eig_area(...)` proxy.
+- Candidate-viewpoint generator described in 5.9 (step 5) as a pure function: `generate_candidates(state, belief, scan_history, info, rng)`.
+
+**Acceptance criteria**
+- Shortest paths match a brute-force BFS on random maps (property test).
+- `return_reserve` is monotonic in distance.
+- `eig_signal` is higher at a position that is a good triangulation baseline than at a position collinear with the previous scan and the belief mean (construct a test belief by hand).
+- `eig_signal` ≥ 0 within Monte-Carlo noise and is reproducible with the same seed.
+- The candidate generator never returns walls, unreachable cells, or more than `max_candidates` items.
+
+**Antigravity prompt**
+```text
+Start Phase 4 from PLAN.md (5.7, 5.8, 5.9 step 5, Phase 4). Implement planner.py, info_gain.py
+and the candidate generator. Write the property tests and the hand-constructed triangulation test
+from the acceptance criteria. Keep every function pure (inputs -> outputs, no hidden state) so it is
+unit-testable. Stop after tests pass.
+```
+
+---
+
+### Phase 5 — Autonomous agent and strategy state machine (≈ 3 h)
+
+**Goal:** A complete agent that runs a mission end to end using only observations.
+
+**Tasks**
+- `strategies.py`: `Strategy` enum, transition function `next_strategy(state, belief_stats, resources, thresholds)` that returns `(new_strategy, trigger_text)`.
+- `agent.py`: class `BayesPlannerAgent` implementing `reset(info)` and `act(obs) -> (Action, Decision)` as in 5.9, including:
+  - belief update from the observation,
+  - strategy transitions with log text,
+  - candidate scoring, safe filtering, execution of the first action of the plan,
+  - plan persistence (keep a multi-step plan until its target is reached or new evidence flips the best candidate by a margin > 15%),
+  - loop detection and revisit penalty,
+  - RETURN and RECHARGE handling,
+  - DECLARE with the final `(x, y, status)` from the belief.
+- `runner.py`: `run_mission(config_path, agent_type, out_dir) -> RunResult` ties the environment and the agent together, passes **only** `Observation` / `PublicMissionInfo` to the agent, and calls the trace logger (stub allowed until Phase 6).
+- `cli.py`: `python -m walle run --config configs/mission_medium.yaml --out outputs/`.
+
+**Acceptance criteria**
+- On `mission_easy.yaml` the agent declares within 3 cells of the truth in ≥ 8 of 10 seeds.
+- **Safety property test:** over 100 random seeds the agent is **never** stranded.
+- The agent uses all of: MOVE, SCAN_SIGNAL, SCAN_AREA, RECHARGE and DECLARE across the test missions (check at least one mission forces a recharge by using a small battery).
+- Strategy transitions occur in the order `EXPLORE → TRACK → VERIFY → DECLARE` in normal runs, and `RETURN/RECHARGE` appear when the battery is low.
+- `test_separation.py`: static check that `agent.py`, `strategies.py`, `planner.py`, `info_gain.py` and `belief.py` do not import `world`/`environment` internals, and the agent receives no attribute that exposes ground truth.
+
+**Antigravity prompt**
+```text
+Start Phase 5 from PLAN.md (5.9, 5.10, Phase 5). Implement strategies.py, agent.py, runner.py
+and the CLI `run` command. The agent receives only PublicMissionInfo and Observation. Follow the
+decision procedure in 5.9 exactly: belief update -> strategy update -> candidate generation ->
+safety filter -> utility scoring -> execute first action -> log. Add the safety property test
+(100 seeds, never stranded), the separation test, and an easy-mission success test. If success
+is below target, tune weights/thresholds in config (not in code) and document each change in
+docs/DECISIONS.md with the before/after numbers. Stop after tests pass and show me the final
+state of one run in the terminal.
+```
+
+---
+
+### Phase 6 — Trace logging and final report (≈ 1.5 h)
+
+**Goal:** Deliverables #4 and #5 from the task.
+
+**Tasks**
+- `trace.py`: `TraceLogger` writing `trace.jsonl` (schema 5.11) and `trace.txt`; saves belief grids every 2 steps to `belief_frames.npz`; includes `strategy_change` events, the top-5 candidates and reasoning strings generated from real numbers.
+- `report.py`: build `report.json` and `report.md` per 5.12, including the evidence table with per-observation information gain and the rule-generated recommended next step.
+- Credible region + calibration note: "truth inside the 90% region: yes/no".
+- Hook both into `runner.py`.
+
+**Acceptance criteria**
+- Every step has exactly one JSONL line with all schema fields (schema test).
+- Replaying the trace's actions on a fresh environment with the same seed reproduces the same observations (replay test).
+- The report always contains all 8 sections, and the numbers in the report match `RunResult` (test).
+- Recommended-next-step text differs correctly between the confident and the unconfident cases (two tests with crafted beliefs).
+- Same seed run twice produces byte-identical `trace.jsonl` (determinism test).
+
+**Antigravity prompt**
+```text
+Start Phase 6 from PLAN.md (5.11, 5.12, Phase 6). Implement trace.py and report.py and wire them
+into runner.py. Reasoning strings must be template-based from real numbers. Add the schema test,
+replay test, report-section test and determinism test. Then run the medium mission with seed 7 and
+save the outputs under outputs/mission_medium_seed7/. Show me the first 15 lines of trace.txt and
+the full report.md. Stop.
+```
+
+---
+
+### Phase 7 — Visualization (≈ 2 h)
+
+**Goal:** Clear visuals of the path, clue locations, belief and strategy changes.
+
+**Tasks**
+- `viz.py`:
+  1. **ASCII renderer** (`render_ascii(state, belief, show_truth=False)`): `#` wall, `C` charger, `W` WALL-E, `!` discovered clue, `E` true EVE (only when `show_truth=True`, post-mission), belief intensity with the ramp `" .:-=+*#%@"` for empty cells; legend underneath. A CLI flag `--ascii` prints frames live.
+  2. **Matplotlib frame renderer**, 3 panels per frame:
+     - map with walls, chargers, travelled path (coloured by strategy), discovered clues (marker by type), scan locations, belief heatmap overlay, MAP star, 90% credible contour, and truth marker only in the final frame;
+     - battery and time curves with recharge events;
+     - entropy / location-confidence curves with strategy-change vertical lines and labels.
+  3. `summary.png`: the final frame with the full path and legend.
+  4. `run.gif`: a frame every step (or every 2 steps for long runs), 6–8 fps, plus a 2 second hold on the last frame.
+- CLI: `python -m walle viz --run outputs/mission_medium_seed7/` creates frames and the GIF from saved files (so visualization does not re-run the mission).
+
+**Acceptance criteria**
+- GIF generation completes in under 60 s for a typical run.
+- Strategy changes are visible in two places: coloured path segments and labelled vertical lines.
+- The truth marker appears **only** in the final frame and the report, never during the run.
+- Works headless (`matplotlib.use("Agg")`).
+
+**Antigravity prompt**
+```text
+Start Phase 7 from PLAN.md (Phase 7). Implement viz.py with the ASCII renderer, the three-panel
+matplotlib frame renderer, summary.png and run.gif, and the `viz` CLI command that works from the saved
+trace + belief_frames.npz. Use the Agg backend. Reveal the true EVE only on the final frame.
+Generate the visuals for outputs/mission_medium_seed7 and show me summary.png. Stop.
+```
+
+---
+
+### Phase 8 — Testing hardening and robustness (≈ 1.5 h)
+
+**Goal:** Confidence that nothing silly breaks.
+
+**Tasks**
+- Edge-case missions (as YAML in `tests/data/`): tiny battery (forces early recharge), start adjacent to EVE, EVE far away behind walls, no bearing in the initial signal (coordinates only), zero clues, very noisy sensors.
+- Fuzz test: 200 random configs, assert no crashes, no negative resources, never stranded, report produced.
+- Lint/format pass; remove dead code; make sure every public function has a docstring.
+- Run coverage (`pytest --cov`) and aim for ≥ 80% on `belief`, `planner`, `environment`, `agent`.
+
+**Acceptance criteria**
+- `pytest -q` is green and takes under 2 minutes.
+- Fuzz test passes with 200 seeds.
+- Add `scripts/run_all_samples.sh` which regenerates every sample output in one command.
+
+**Antigravity prompt**
+```text
+Start Phase 8 from PLAN.md. Add the edge-case mission YAMLs and tests, the 200-config fuzz test,
+the coverage run, and scripts/run_all_samples.sh. Fix any bug the new tests expose and document each
+fix in docs/DECISIONS.md. Show me the final pytest summary and coverage table. Stop.
+```
+
+---
+
+### Phase 9 — Bonus A: noisy sensors and decoy / spoofed signals (≈ 1.5 h)
+
+**Goal:** Robustness story that impresses reviewers.
+
+**Tasks**
+- Enable `decoys.count`, `spoof_probability`, `false_clue_probability`, `noise_scale` in the environment (forward model already supports them from Phase 2).
+- Agent robustness: set `assumed_spoof_rate`, use the mixture likelihood, add **contradiction detection**: if a reading has likelihood below a threshold under the current belief's top hypothesis, flag it as "suspicious", take a confirming scan from a different viewpoint before trusting it (log "suspected decoy").
+- `configs/mission_hard_decoys.yaml` with `noise_scale: 1.5`, `spoof_probability: 0.15`, `false_clue_probability: 0.1`, `assumed_spoof_rate: 0.15`.
+- Ablation: run the hard mission with `assumed_spoof_rate = 0` vs `0.15` over 50 seeds and compare success rates.
+
+**Acceptance criteria**
+- The agent with robust likelihood has a higher success rate than the naive one on the hard mission (report the numbers, even if the gap is small).
+- Trace marks suspicious readings and the report lists them in "Evidence" with the status `discounted`.
+
+**Antigravity prompt**
+```text
+Start Phase 9 (Bonus A) from PLAN.md. Enable decoys, false clues and higher noise end to end.
+Add the robust mixture likelihood usage in the agent, suspicious-reading detection with a confirming
+scan, the hard-decoys config, and an ablation script scripts/ablation_decoys.py that compares
+assumed_spoof_rate 0 vs 0.15 over 50 seeds and prints a table + saves a CSV. Update the report to
+list discounted readings. Stop after tests pass.
+```
+
+---
+
+### Phase 10 — Bonus B: benchmark and planner comparison (≈ 1.5 h)
+
+**Goal:** Generalization evidence across random missions.
+
+**Tasks**
+- `benchmark.py`: generates `N` random missions (default 100) by varying seed, grid size (12–25), wall density (0–0.2), battery (60–120), noise scale (0.8–1.5) and runs `random`, `greedy_bearing` and `bayes_planner` agents on identical missions.
+- Output `outputs/benchmark/benchmark_results.csv` with all metrics from 5.13 per run, an aggregated markdown table, and a bar-chart PNG (success rate, mean error, mean battery used, stranded rate).
+- CLI: `python -m walle benchmark --n 100 --out outputs/benchmark`.
+- **LLM comparison (optional, only if everything else is finished):** implement `LLMAgent` behind the same `Agent` protocol that sends a text summary of the state (position, battery, last observations, belief MAP/entropy) to an API and parses an action. API key via environment variable, never committed. If skipped, write one honest paragraph in the README explaining why a classical Bayesian planner was used (explainability, determinism, no API cost, guaranteed safety constraint) and mention the LLM comparison as future work.
+
+**Acceptance criteria**
+- Benchmark runs 100 missions × 3 agents in under 10 minutes.
+- Aggregated table shows `bayes_planner` clearly better than the baselines on success rate and with 0% stranded.
+- Results are reproducible with `--seed`.
+
+**Antigravity prompt**
+```text
+Start Phase 10 (Bonus B) from PLAN.md. Implement benchmark.py and the CLI command: random mission
+generator with the parameter ranges in the plan, run random / greedy_bearing / bayes_planner on identical
+missions, write benchmark_results.csv, an aggregated markdown table and a bar chart. Skip the LLM agent
+for now (do not add any API dependency). Run it with n=100 and show me the table. Stop.
+```
+
+---
+
+### Phase 11 — README, documentation and packaging (≈ 1.5 h)
+
+**Goal:** A repo a stranger can understand and run in 5 minutes.
+
+**README.md structure (ask Antigravity to follow exactly)**
+1. Title, one-paragraph pitch, GIF at the top.
+2. Features checklist mapped to the task requirements (use the table in Section 1.2).
+3. Quick start: install, run the easy mission, run the medium mission, view outputs, run tests, run the benchmark.
+4. **Environment design:** grid, hidden state, actions and costs table, termination rules, sensor model formulas, clue types.
+5. **Config format:** annotated YAML plus a link to `CONFIG_REFERENCE.md`.
+6. **Agent design:** architecture diagram, belief representation, information-gain planning, safe-return invariant, strategy state machine diagram, why this approach.
+7. **Trace and report format** with excerpts.
+8. **Sample results:** embed `summary.png`, a short excerpt of the trace and the report, and the benchmark table.
+9. **Design decisions and limitations** (fully honest: 2D grid only, static EVE unless random walk enabled, no physics simulator, etc.).
+10. Future work (LLM agent comparison, multi-agent coordination, Webots/Gazebo, continuous space with particle filter).
+11. Project structure and testing.
+
+Also finalize `docs/DESIGN.md` (math of the update and the utility) and `docs/DECISIONS.md`.
+
+**Acceptance criteria**
+- A fresh clone, `pip install -r requirements.txt`, then the three README commands work exactly as written.
+- All images in the README exist and render on GitHub.
+- No leftover TODOs, no secrets, `outputs/` contains at least the medium and hard sample runs.
+
+**Antigravity prompt**
+```text
+Start Phase 11. Write README.md following the 11-section structure in PLAN.md Phase 11, finalize
+docs/DESIGN.md (belief update math and the utility function with the actual weights) and docs/DECISIONS.md.
+Embed the GIF and summary.png. Then do a fresh-clone dry run: create a new venv in a temp directory,
+install, and execute every command written in the README, fixing the README or the code if any command fails.
+Show me the dry-run log. Stop.
+```
+
+---
+
+### Phase 12 — Final QA and submission (≈ 1 h)
+
+**Checklist**
+- [ ] `pytest -q` is green.
+- [ ] `scripts/run_all_samples.sh` regenerates `outputs/` without errors.
+- [ ] Sample outputs committed: easy, medium and hard mission, each with `trace.jsonl`, `trace.txt`, `report.md`, `report.json`, `summary.png`, `run.gif`.
+- [ ] README has the GIF, the commands, the config explanation and honest limitations.
+- [ ] Repo is on GitHub (public, or access granted as the portal requires), with a clear commit history (at least one commit per phase).
+- [ ] No API keys, no `.env`, no giant files (GIF under ~10 MB).
+- [ ] Repo link, README link and a 1-minute demo video (if the portal allows) prepared.
+- [ ] Submitted at least 5 hours before 11:59 PM on 15 Oct.
+
+---
+
+## 7. Suggested schedule (assumes about 38 hours remaining from the morning of 14 Oct)
+
+| Block | When | Phases | Goal |
+|---|---|---|---|
+| A | 14 Oct, morning | 0, 1 | Skeleton, config and world working and tested |
+| B | 14 Oct, afternoon | 2, 3 | Simulator and belief engine working and tested |
+| C | 14 Oct, evening | 4, 5 | First complete autonomous run, even if rough |
+| D | 14 Oct, night (stop at a sane hour) | 6 | Trace and report generated |
+| E | 15 Oct, morning | 7, 8 | Visuals and hardening |
+| F | 15 Oct, afternoon | 11, 12 (+ 9 or 10 if time remains) | README, final QA, **submit by 6 PM** |
+
+**Cut-lines if you fall behind** (cut from the top first):
+1. LLM comparison (never needed).
+2. `random_walk` EVE mobility.
+3. Benchmark chart polish (keep the CSV).
+4. GIF (keep `summary.png` and ASCII frames).
+5. Decoys (Phase 9) — only if Phase 10 is also impossible; the benchmark is the more valuable bonus.
+
+**Never cut:** the safe-return invariant and its test, the separation test, a sample run with `trace` and `report`, the README.
+
+---
+
+## 8. Debugging playbook (if the agent misbehaves)
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Belief collapses onto a wrong cell | Wrong bearing convention or sign (y axis points down) | Test `bearing()` on all compass directions; use the single helper everywhere |
+| Belief never narrows | Likelihood sigmas too wide, or likelihood not applied at the agent's position at the time of the reading | Log the agent position used in each update; plot the likelihood alone |
+| Agent scans in place forever | EIG of the current cell always highest | Add a repeated-scan penalty (diminishing returns: halve EIG for each scan from the same cell) |
+| Agent oscillates between two cells | Utility differences smaller than noise | Plan persistence (keep a plan until a >15% better option appears) and the revisit penalty |
+| Agent strands | Reserve calculated from the wrong position (before moving instead of after) | The safety check must use the position after the action |
+| Agent never recharges | Reserve too low or charger cost mis-specified | Print reserve and battery per step in the text trace |
+| MC EIG is noisy | Too few samples | Raise `mc_samples` to 80 or use common random numbers across candidates |
+| Run is slow | Likelihoods re-computed in Python loops | Precompute coordinate grids once; vectorize; cache BFS maps |
+| Declares too early or too late | Thresholds mis-tuned | Tune `declare_location` and `declare_status` using the benchmark, not by guessing |
+
+---
+
+## 9. Interview and viva preparation (read this before Round 2)
+
+Be ready to explain these in plain words:
+
+1. **What is a belief and why a grid?** A probability for every possible EVE position and status. Every sensor reading multiplies the belief by how likely that reading would be at each cell, then re-normalizes (Bayes' rule).
+2. **Why does the agent move to a *different* place before scanning again?** Two bearings from different places cross at EVE (triangulation). Strength gives the distance. The expected-information-gain score captures this automatically.
+3. **What is expected information gain?** The average drop in entropy (uncertainty, in bits) we expect from taking a measurement, estimated by simulating possible readings.
+4. **How does the agent avoid dying out in the field?** The safe-return invariant: it only acts if after the action it still has enough battery to reach a charger, with a margin.
+5. **Why did you not use reinforcement learning or an LLM?** The problem is small and structured, we need guarantees (safety, explainability, determinism), and no training data. A Bayesian planner gives interpretable traces. RL or LLM comparison is future work.
+6. **How does the agent infer EVE's status?** Signal amplitude and dropout rates depend on the status, and status clues give labels. The joint belief over location and status handles the ambiguity "weak signal = far or low-power?" by using bearings and multiple viewpoints.
+7. **What happens with decoy signals?** Mixture likelihood plus confirmation scans.
+8. **What are the limits?** 2D grid, known map, simple noise models, static EVE by default, no physics.
+9. **How do you know it works?** Unit tests, safety property test over 100 seeds, benchmark against baselines, and calibration (the truth falls inside the 90% region about 90% of the time).
+
+Practice a 2-minute walkthrough of the GIF: initial uncertainty, the first scans, the strategy change to TRACK, the recharge detour, VERIFY, final declare, and the report.
+
+---
+
+## 10. Definition of done
+
+The project is done when a reviewer can clone the repo, follow the README, run one command, and get: a belief-driven autonomous run that never strands, a complete JSONL trace with reasoning, a final mission report with evidence, inferred location and status, confidence and a recommended next step, plus a GIF showing the path, clue discoveries and strategy changes. All of that is backed by passing tests and an honest list of limitations.
