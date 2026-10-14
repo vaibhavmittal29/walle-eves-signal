@@ -33,3 +33,9 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Robust Mixture**: When `assumed_spoof_rate > 0`, likelihood is mixed with a uniform baseline $L_{robust} = (1 - \epsilon) L + \epsilon \cdot \frac{1}{|Free| \times K}$ to prevent total mass collapse on decoy readings.
 - **Contradiction Fallback**: In the rare event of contradictory measurements collapsing total mass below $10^{-12}$, the belief safely falls back to a 90/10 blend with the uniform prior and logs a contradiction.
 - **Deduplicated Clues**: `apply_observation` ensures each clue observation is incorporated exactly once into the belief, preventing overcounting of static evidence.
+
+## Phase 4: Planner, Safe Return, & Information Gain
+- **BFS Shortest Paths**: Precomputes shortest 4-connected grid distances from chargers and arbitrary goals, avoiding walls.
+- **Safe-Return Invariant**: Explicitly enforced via `is_action_safe(current_battery, pos_after, action_cost, chargers, ...)`. Rejects any action if the resulting battery is less than `ceil(dist_to_nearest_charger * move_battery_cost * (1 + margin_fraction) + margin_flat)`.
+- **Triangulation Optimization**: Monte-Carlo EIG estimation mathematically favors orthogonal viewpoints that maximize angular diversity over redundant collinear positions along existing bearing lines.
+- **Candidate Viewpoints**: Combines local 4-neighbors, charging stations, proximity to the MAP hypothesis, an annulus around the belief mean, and angular diversity relative to scan history.
