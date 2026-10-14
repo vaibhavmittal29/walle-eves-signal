@@ -26,3 +26,10 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Recharge Mechanics**: Only allowed while standing on a charger cell. Off-charger attempts fail (`action_succeeded=False`) but consume time.
 - **Clue Discovery**: Revealed clues are remembered in environment state so subsequent scans return them deterministically without re-rolling detection probabilities.
 - **Termination Invariants**: Mission ends upon `DECLARE`, `stranded` (battery reaches 0 while off-charger), or `timeout` (time budget exhausted or max steps ceiling exceeded).
+
+## Phase 3: Belief Engine
+- **Belief Tensor**: Exact Bayesian filtering over 3D tensor $B[y, x, k]$ representing the joint probability over cell coordinates $(x, y)$ and operational status $k \in \{\text{active}, \text{low\_power}, \text{damaged}\}$.
+- **Vectorized Likelihoods**: Likelihood builders precompute Euclidean distances and compass bearings using NumPy meshgrids, zeroing out walls and normalizing across status dimensions.
+- **Robust Mixture**: When `assumed_spoof_rate > 0`, likelihood is mixed with a uniform baseline $L_{robust} = (1 - \epsilon) L + \epsilon \cdot \frac{1}{|Free| \times K}$ to prevent total mass collapse on decoy readings.
+- **Contradiction Fallback**: In the rare event of contradictory measurements collapsing total mass below $10^{-12}$, the belief safely falls back to a 90/10 blend with the uniform prior and logs a contradiction.
+- **Deduplicated Clues**: `apply_observation` ensures each clue observation is incorporated exactly once into the belief, preventing overcounting of static evidence.

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional, Sequence, Tuple
+import math
+from typing import Any, Mapping, Optional, Sequence, Set, Tuple
 import numpy as np
 
 from walle.config import SensorConfig
-from walle.geometry import bearing, distance
-from walle.observations import SignalReading
+from walle.geometry import bearing, distance, wrap_angle
+from walle.observations import SensorPrior, SignalReading
+
+STATUSES = ("active", "low_power", "damaged")
+STATUS_TO_IDX = {"active": 0, "low_power": 1, "damaged": 2}
 
 
 def expected_strength(
@@ -20,15 +24,6 @@ def expected_strength(
 
     Formula:
         mu(d, k) = A_k / (1 + (d / d0)^2)
-
-    Args:
-        d: Distance from sensor to transmitter.
-        status: Status string ('active', 'low_power', 'damaged').
-        amplitude: Status-to-amplitude mapping A_k.
-        d0: Characteristic half-power distance scale.
-
-    Returns:
-        Expected signal strength.
     """
     amp = amplitude.get(status, 1.0)
     return float(amp / (1.0 + (d / d0) ** 2))
@@ -42,33 +37,13 @@ def sample_signal(
     rng: np.random.Generator,
     decoys: Optional[Sequence[Tuple[int, int]]] = None,
 ) -> SignalReading:
-    """Sample a noisy signal reading from the environment forward sensor model.
-
-    Features:
-        - Distance-dependent strength decay.
-        - Distance-dependent bearing noise: sigma_theta = (base + per_cell * d) * noise_scale.
-        - Status-dependent packet dropouts (Bernoulli).
-        - Optional decoy spoofing.
-        - Undefined bearing when standing directly on target.
-
-    Args:
-        agent_pos: Receiver coordinate (x, y).
-        eve_pos: True EVE coordinate (x, y).
-        eve_status: True EVE status ('active', 'low_power', 'damaged').
-        sensor: Sensor configuration parameters.
-        rng: Seeded random number generator.
-        decoys: Optional list of decoy transmitter locations.
-
-    Returns:
-        SignalReading dataclass instance.
-    """
+    """Sample a noisy signal reading from the environment forward sensor model."""
     # 1. Decoy spoofing check
     if decoys and len(decoys) > 0 and sensor.decoys.spoof_probability > 0:
         if rng.random() < sensor.decoys.spoof_probability:
             decoy_idx = rng.integers(0, len(decoys))
             decoy_pos = decoys[decoy_idx]
             d_decoy = distance(agent_pos, decoy_pos)
-            # Decoy emits with active amplitude (1.0)
             mu_decoy = 1.0 / (1.0 + (d_decoy / sensor.d0) ** 2)
             s_noise = rng.normal(0.0, sensor.strength_sigma * sensor.noise_scale)
             s_obs = float(np.clip(mu_decoy + s_noise, 0.0, 1.0))
@@ -96,7 +71,6 @@ def sample_signal(
 
     # 4. Bearing calculation
     if d < 1e-6:
-        # Standing on EVE's cell: bearing is undefined
         return SignalReading(strength=s_obs, bearing_deg=None, dropout=False)
 
     sigma_theta = (
@@ -147,3 +121,189 @@ def sample_clue_value(
         return str(rng.choice(wrong))
 
     raise ValueError(f"Unknown clue type '{clue_type}'.")
+
+
+# =========================================================================
+# BAYESIAN INFERENCE LIKELIHOOD BUILDERS (Vectorized over H x W x 3 tensor)
+# =========================================================================
+
+def _compute_grid_distances_and_bearings(
+    origin: Tuple[int, int],
+    width: int,
+    height: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Precompute Euclidean distance and compass bearings from origin to all grid cells.
+
+    Returns:
+        dist_grid: shape (height, width)
+        bearing_grid: shape (height, width) in degrees [0, 360)
+    """
+    ox, oy = origin
+    x = np.arange(width)
+    y = np.arange(height)
+    xx, yy = np.meshgrid(x, y)  # shape (height, width)
+
+    dx = xx - ox
+    dy = yy - oy
+    dist_grid = np.hypot(dx, dy)
+
+    # Compass bearing: 0=North (-y), 90=East (+x), 180=South (+y), 270=West (-x)
+    # atan2(dx, -dy) mod 360
+    bearings = np.degrees(np.arctan2(dx, -dy)) % 360.0
+
+    return dist_grid, bearings
+
+
+def build_signal_likelihood(
+    reading: SignalReading,
+    agent_pos: Tuple[int, int],
+    prior: SensorPrior,
+    width: int,
+    height: int,
+    walls: Set[Tuple[int, int]] | frozenset[Tuple[int, int]],
+) -> np.ndarray:
+    """Build joint likelihood tensor L[y, x, k] for a SCAN_SIGNAL observation.
+
+    Args:
+        reading: SignalReading with strength, bearing, and dropout flag.
+        agent_pos: Current sensor coordinate.
+        prior: Sensor parameters assumed by agent.
+        width: Grid width.
+        height: Grid height.
+        walls: Set of wall coordinates (zeroed out).
+
+    Returns:
+        Array of shape (height, width, 3) representing likelihood values.
+    """
+    L = np.ones((height, width, 3), dtype=np.float64)
+
+    # 1. Handle Dropout
+    if reading.dropout:
+        for st, idx in STATUS_TO_IDX.items():
+            p_drop = prior.dropout.get(st, 0.05)
+            L[:, :, idx] = p_drop
+    else:
+        # Non-dropout: multiply by (1 - P_drop[k])
+        for st, idx in STATUS_TO_IDX.items():
+            p_nodrop = max(1e-6, 1.0 - prior.dropout.get(st, 0.05))
+            L[:, :, idx] *= p_nodrop
+
+        d_grid, b_grid = _compute_grid_distances_and_bearings(agent_pos, width, height)
+
+        # 2. Strength Likelihood: N(strength_obs; mu(d, k), sigma_s)
+        if reading.strength is not None:
+            s_obs = reading.strength
+            sigma_s = prior.strength_sigma * prior.noise_scale
+            norm_const_s = 1.0 / (math.sqrt(2.0 * math.pi) * sigma_s)
+
+            for st, idx in STATUS_TO_IDX.items():
+                amp = prior.amplitude.get(st, 1.0)
+                mu_grid = amp / (1.0 + (d_grid / prior.d0) ** 2)
+                z = (s_obs - mu_grid) / sigma_s
+                L_s = norm_const_s * np.exp(-0.5 * (z ** 2))
+                L[:, :, idx] *= L_s
+
+        # 3. Bearing Likelihood: N(wrap(theta_obs - theta_grid); 0, sigma_theta(d))
+        if reading.bearing_deg is not None:
+            b_obs = reading.bearing_deg
+            sigma_b = (
+                prior.bearing_sigma_base_deg + prior.bearing_sigma_per_cell_deg * d_grid
+            ) * prior.noise_scale
+            # Angle difference wrapped to (-180, 180]
+            diff = (b_obs - b_grid + 180.0) % 360.0 - 180.0
+            diff[diff <= -180.0] += 360.0
+
+            z_b = diff / sigma_b
+            norm_const_b = 1.0 / (np.sqrt(2.0 * math.pi) * sigma_b)
+            L_b = norm_const_b * np.exp(-0.5 * (z_b ** 2))
+
+            # Directly on agent position, bearing is undefined -> neutral likelihood (1.0)
+            ax, ay = agent_pos
+            if 0 <= ax < width and 0 <= ay < height:
+                L_b[ay, ax] = 1.0
+
+            for idx in range(3):
+                L[:, :, idx] *= L_b
+
+    # Robust mixture model if assumed_spoof_rate > 0
+    eps = prior.assumed_spoof_rate
+    if eps > 0:
+        num_free = (width * height) - len(walls)
+        uniform_density = 1.0 / max(1, num_free * 3)
+        L = (1.0 - eps) * L + eps * uniform_density
+
+    # Zero out walls
+    for wx, wy in walls:
+        if 0 <= wx < width and 0 <= wy < height:
+            L[wy, wx, :] = 0.0
+
+    return L
+
+
+def build_clue_likelihood(
+    clue_pos: Tuple[int, int],
+    clue_type: str,
+    clue_value: Any,
+    prior: SensorPrior,
+    width: int,
+    height: int,
+    walls: Set[Tuple[int, int]] | frozenset[Tuple[int, int]],
+) -> np.ndarray:
+    """Build joint likelihood tensor L[y, x, k] for a clue observation.
+
+    Args:
+        clue_pos: Coordinate where clue was revealed.
+        clue_type: 'bearing', 'range', or 'status'.
+        clue_value: Observed clue value.
+        prior: Sensor parameters assumed by agent.
+        width: Grid width.
+        height: Grid height.
+        walls: Set of wall coordinates.
+
+    Returns:
+        Array of shape (height, width, 3).
+    """
+    L = np.ones((height, width, 3), dtype=np.float64)
+    d_grid, b_grid = _compute_grid_distances_and_bearings(clue_pos, width, height)
+
+    if clue_type == "bearing":
+        b_obs = float(clue_value)
+        sigma_b = prior.clue_bearing_sigma_deg * prior.noise_scale
+        diff = (b_obs - b_grid + 180.0) % 360.0 - 180.0
+        diff[diff <= -180.0] += 360.0
+        z = diff / sigma_b
+        L_b = (1.0 / (math.sqrt(2.0 * math.pi) * sigma_b)) * np.exp(-0.5 * (z ** 2))
+        cx, cy = clue_pos
+        if 0 <= cx < width and 0 <= cy < height:
+            L_b[cy, cx] = 1.0
+        for idx in range(3):
+            L[:, :, idx] *= L_b
+
+    elif clue_type == "range":
+        r_obs = float(clue_value)
+        sigma_r = prior.clue_range_sigma * prior.noise_scale
+        z = (r_obs - d_grid) / sigma_r
+        L_r = (1.0 / (math.sqrt(2.0 * math.pi) * sigma_r)) * np.exp(-0.5 * (z ** 2))
+        for idx in range(3):
+            L[:, :, idx] *= L_r
+
+    elif clue_type == "status":
+        label = str(clue_value)
+        q = prior.clue_status_accuracy
+        for st, idx in STATUS_TO_IDX.items():
+            prob = q if st == label else (1.0 - q) / 2.0
+            L[:, :, idx] *= prob
+
+    # Robust mixture if assumed_spoof_rate > 0
+    eps = prior.assumed_spoof_rate
+    if eps > 0:
+        num_free = (width * height) - len(walls)
+        uniform_density = 1.0 / max(1, num_free * 3)
+        L = (1.0 - eps) * L + eps * uniform_density
+
+    # Zero out walls
+    for wx, wy in walls:
+        if 0 <= wx < width and 0 <= wy < height:
+            L[wy, wx, :] = 0.0
+
+    return L
