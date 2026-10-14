@@ -51,3 +51,11 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Custom JSON Serializer**: Added `_json_default` in `trace.py` and `report.py` to seamlessly convert NumPy integer/float/array types into JSON-serializable primitives.
 - **Compressed Belief Frames**: Rather than bloating JSON traces with full probability grids, 2D belief marginals are saved to `belief_frames.npz` every 2 steps and on declaration for visualization.
 - **Rule-Based Recommendations**: Report generator synthesizes actionable next steps based on posterior concentration (confident direct dispatch vs. exploratory scans) and operational status (`low_power`/`damaged` rescue payloads).
+
+## Phase 7: Visualization Architecture
+- **Three-Panel Composite Layout**:
+  - Panel 1: 2D Spatial Grid with belief heatmap overlay, walls, chargers, strategy-colored path segments, scan points, and MAP estimate (with true EVE revealed only in the final frame).
+  - Panel 2: Energy Reserves curve (actual battery remaining vs. computed mandatory return reserve buffer).
+  - Panel 3: Information Theoretic Convergence (joint Shannon entropy in bits on primary axis and spatial confidence percentage on secondary axis, annotated with strategy transition events).
+- **Post-Hoc Artifact Rendering**: Visualization (`walle viz`) runs independently on saved artifacts (`trace.jsonl`, `report.json`, and `belief_frames.npz`), ensuring zero re-simulation overhead during presentation generation.
+- **Animated GIF Dynamics**: Rendered with Pillow at ~6.6 fps, concluding with a 2-second hold on the final declared state.

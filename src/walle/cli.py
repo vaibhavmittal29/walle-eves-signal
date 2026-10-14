@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from walle.runner import run_mission
+from walle.viz import generate_visuals_from_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run a mission simulation")
     run_parser.add_argument("--config", type=str, required=True, help="Path to YAML configuration")
     run_parser.add_argument("--agent", type=str, default="bayes_planner", choices=["bayes_planner", "greedy_bearing", "random"], help="Agent type")
-    run_parser.add_argument("--out", type=str, default="outputs", help="Output directory")
+    run_parser.add_argument("--out", type=str, default=None, help="Output directory")
     run_parser.add_argument("--seed", type=int, default=None, help="Optional mission seed override")
     run_parser.add_argument("--ascii", action="store_true", help="Print ASCII frames live")
 
@@ -71,6 +72,13 @@ def main(args: list[str] | None = None) -> int:
         print(f"Credible Region Hit: {res.credible_hit}")
         print(f"Mission Success:     {'SUCCESS' if res.success else 'FAILED'}")
         print("=" * 50 + "\n")
+        return 0
+
+    if parsed_args.command == "viz":
+        print(f"\n[WALL-E Viz] Generating summary and animation from {parsed_args.run}...")
+        summary_p, gif_p = generate_visuals_from_run(parsed_args.run)
+        print(f"Saved summary frame: {summary_p}")
+        print(f"Saved animated GIF:  {gif_p}\n")
         return 0
 
     print(f"WALL-E CLI: command '{parsed_args.command}' called.")
