@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "walle-eve-signal"
+version = "0.1.0"
+description = "Autonomous search agent for WALL-E and EVE's Signal"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7.0",
+    "pillow>=9.5.0",
+    "imageio>=2.30.0",
+]
+
+[project.scripts]
+walle = "walle.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
