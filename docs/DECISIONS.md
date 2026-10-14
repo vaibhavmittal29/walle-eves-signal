@@ -63,3 +63,12 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Edge-Case Matrix**: Implemented tests covering extreme scenarios including tiny battery (agent safely recharges or terminates without stranding), starting immediately adjacent to EVE, EVE placed in isolated wall alcoves, missions with completely disabled bearings, missions with zero status clues, and extreme sensor noise ($\sigma_d = 5.0, \sigma_\theta = 60^\circ$).
 - **200-Seed Fuzz Testing**: Automated Monte Carlo fuzz test running 200 randomized seeds across diverse world geometries. Guaranteed the core zero-stranding safety invariant (0% stranded across all 200 runs) with graceful degradation to timeout rather than stranding under tight budgets.
 - **Automated Sample Runner**: Created cross-platform bash (`scripts/run_all_samples.sh`) and PowerShell (`scripts/run_all_samples.ps1`) scripts to deterministically run and render sample missions across `mission_easy`, `mission_medium_seed7`, and `mission_hard_decoys`.
+
+## Phase 9: Bonus A - Noisy Sensors, Decoys, & Robust Mixture Likelihood
+- **Mixture Likelihood Formulation**: When `assumed_spoof_rate` $\epsilon > 0$, likelihoods incorporate a uniform floor: $L_{\text{robust}} = (1 - \epsilon) L_{\text{true}} + \epsilon \cdot u$. This mathematically prevents deceptive outlier signals from collapsing the posterior to zero mass at the true coordinates.
+- **Contradiction Detection (>3$\sigma$)**: Signals arriving with angular error exceeding $3\sigma_\theta$ (and $> 45^\circ$) relative to the current confident MAP hypothesis are flagged as `is_suspicious` (suspected decoy).
+- **Confirmation Scans & Decoy Discounting**: Suspected decoys are heavily discounted via mixture attenuation, and the agent schedules an immediate confirmation scan from an orthogonal viewpoint ($45^\circ - 135^\circ$ angular separation) before trusting the hypothesis. Final declaration is deferred while confirmation is pending.
+- **Evidence Labeling**: Traces log `"suspicious": true`, and mission reports categorize readings as `discounted` in the Evidence Table with explanations.
+- **50-Seed Ablation Proof**: Over 50 randomized seeds on `mission_hard_decoys` ($\text{noise\_scale}=1.5$, 2 decoys, $15\%$ spoof rate):
+  - Naive Agent ($\epsilon=0.0$): 62.0% Success Rate, 2.03 cells mean error.
+  - Robust Agent ($\epsilon=0.15$): **92.0% Success Rate** (+30.0% gain), **1.26 cells mean error** (median 0.00 cells), 94.0% status accuracy (+20.0% gain), and 0.0% stranded rate.

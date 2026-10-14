@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 
 from walle.actions import Action, ActionType, MOVE_DELTAS, cost_of
 from walle.belief import Belief, apply_observation
-from walle.geometry import distance
+from walle.geometry import bearing, distance, wrap_angle
 from walle.info_gain import eig_area, eig_signal, generate_candidates
 from walle.observations import Observation, PublicMissionInfo
 from walle.planner import (
@@ -76,6 +76,11 @@ class BayesPlannerAgent:
         self._charger_dist_maps: Dict[Tuple[int, int], Dict[Tuple[int, int], int]] = {}
         self.strategy_change_log: List[Dict[str, object]] = []
 
+        # Decoy and contradiction tracking
+        self.last_observation_suspicious: bool = False
+        self._pending_confirmation: bool = False
+        self._suspicious_readings_count: int = 0
+
     def reset(self, info: PublicMissionInfo) -> None:
         """Initialize the agent with public mission specification."""
         self._info = info
@@ -92,6 +97,10 @@ class BayesPlannerAgent:
         self._current_plan_goal = None
         self._current_plan_utility = -999.0
         self.strategy_change_log.clear()
+
+        self.last_observation_suspicious = False
+        self._pending_confirmation = False
+        self._suspicious_readings_count = 0
 
         # Precompute charger distance maps
         self._charger_dist_maps = {
@@ -115,9 +124,42 @@ class BayesPlannerAgent:
         pos = obs.position
         self._pos_history.append(pos)
 
-        # 1. Update belief from latest observation
+        # 1. Contradiction / decoy check against current MAP hypothesis
+        is_suspicious = False
+        effective_prior = None
+
+        if obs.signal is not None and obs.step > 0 and obs.signal.bearing_deg is not None and not obs.signal.dropout:
+            prev_map_x, prev_map_y = belief.map_estimate()
+            prev_conf = belief.mass_within((prev_map_x, prev_map_y), radius=1.5)
+            if prev_conf >= 0.25:
+                d_target = distance(pos, (prev_map_x, prev_map_y))
+                if d_target >= 1.0:
+                    exp_b = bearing(pos, (prev_map_x, prev_map_y))
+                    ang_err = abs(wrap_angle(obs.signal.bearing_deg - exp_b))
+                    sigma_b = (
+                        info.sensor_prior.bearing_sigma_base_deg
+                        + info.sensor_prior.bearing_sigma_per_cell_deg * d_target
+                    ) * info.sensor_prior.noise_scale
+                    if ang_err > max(3.0 * sigma_b, 45.0):
+                        is_suspicious = True
+                        self._pending_confirmation = True
+                        self._suspicious_readings_count += 1
+
+        self.last_observation_suspicious = is_suspicious
+
+        # Robust discounting via mixture model if assumed_spoof_rate > 0
+        if is_suspicious and info.sensor_prior.assumed_spoof_rate > 0:
+            effective_prior = replace(
+                info.sensor_prior,
+                assumed_spoof_rate=max(0.80, info.sensor_prior.assumed_spoof_rate),
+            )
+
+        # 2. Update belief from latest observation
         if obs.signal is not None and obs.step > 0:
             self._scan_history.append(pos)
+            if self._pending_confirmation and len(self._scan_history) >= 2:
+                if self._scan_history[-1] != self._scan_history[-2]:
+                    self._pending_confirmation = False
 
         # Ingest clues
         if obs.clues:
@@ -131,9 +173,10 @@ class BayesPlannerAgent:
             agent_pos=pos,
             info=info,
             incorporated_clue_ids=self._incorporated_clue_ids,
+            effective_prior=effective_prior,
         )
 
-        # 2. Evaluate metrics and confidence
+        # 3. Evaluate metrics and confidence
         map_x, map_y = belief.map_estimate()
         loc_conf = belief.mass_within((map_x, map_y), radius=1.5)
         status_marg = belief.status_marginal()
@@ -153,7 +196,7 @@ class BayesPlannerAgent:
             charger_dist_maps=self._charger_dist_maps,
         )
 
-        # 3. Strategy State Machine Transitions
+        # 4. Strategy State Machine Transitions
         cheapest_useful_cost = min(info.costs.move.battery, info.costs.scan_signal.battery)
         new_strat, prev_strat, trigger = evaluate_strategy_transition(
             current_strategy=self._strategy,
@@ -168,6 +211,11 @@ class BayesPlannerAgent:
             on_charger=obs.on_charger,
             thresholds=self._get_thresholds(),
         )
+
+        # Delay DECLARE if a confirmation scan is pending
+        if new_strat == Strategy.DECLARE and self._pending_confirmation:
+            new_strat = Strategy.VERIFY
+            trigger = "Holding DECLARE: pending confirmation scan of suspected decoy"
 
         if new_strat != self._strategy:
             self.strategy_change_log.append({
@@ -424,6 +472,14 @@ class BayesPlannerAgent:
             denominator = 1.0 + (weights.w_cost * cost_norm)
             u_vp = numerator / max(1e-4, denominator)
 
+            # If confirmation scan is pending, boost viewpoints providing orthogonal triangulation
+            if self._pending_confirmation:
+                b_curr = bearing(pos, (map_x, map_y))
+                b_vp = bearing(vp, (map_x, map_y))
+                ang_sep = abs(wrap_angle(b_vp - b_curr))
+                if 45.0 <= ang_sep <= 135.0:
+                    u_vp += 0.50
+
             # Penalize recently scanned viewpoints
             if vp in self._scan_history[-3:]:
                 u_vp *= 0.50
@@ -483,11 +539,18 @@ class BayesPlannerAgent:
         b_cost = cost_of(chosen_action, info.costs)[0]
         bat_after = obs.battery - b_cost
 
-        reasoning = (
-            f"Entropy {belief.entropy():.2f} bits; best goal {best_cand.goal} gives "
-            f"{best_cand.eig_bits:.2f} bits (cost {b_cost} bat); reserve {current_res} "
-            f"satisfied ({obs.battery}-{b_cost}={bat_after})."
-        )
+        if self._pending_confirmation:
+            reasoning = (
+                f"[SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); "
+                f"confirming from viewpoint {best_cand.goal}; reserve {current_res} "
+                f"satisfied ({obs.battery}-{b_cost}={bat_after})."
+            )
+        else:
+            reasoning = (
+                f"Entropy {belief.entropy():.2f} bits; best goal {best_cand.goal} gives "
+                f"{best_cand.eig_bits:.2f} bits (cost {b_cost} bat); reserve {current_res} "
+                f"satisfied ({obs.battery}-{b_cost}={bat_after})."
+            )
 
         plan_desc = [a.type.value for a in [chosen_action] + self._current_plan]
         decision = Decision(

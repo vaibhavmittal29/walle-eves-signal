@@ -209,6 +209,9 @@ def run_mission(
             min_battery_margin = obs.battery
 
         # Evidence tracking
+        is_susp = getattr(agent, "last_observation_suspicious", False)
+        status_tag = "discounted" if is_susp else "trusted"
+
         if obs.signal is not None:
             gain = agent._belief.last_kl_divergence if isinstance(agent, BayesPlannerAgent) else 0.0
             map_est = agent._belief.map_estimate() if isinstance(agent, BayesPlannerAgent) else (0, 0)
@@ -222,7 +225,12 @@ def run_mission(
                 "type": "scan_signal",
                 "raw_value": sig_val,
                 "info_gain_bits": gain,
-                "effect": f"Updated MAP to {map_est}, entropy={agent._belief.entropy():.2f}b" if isinstance(agent, BayesPlannerAgent) else "-",
+                "status": status_tag,
+                "effect": (
+                    "Discounted suspected decoy (bearing mismatch > 3σ); scheduled confirmation scan"
+                    if is_susp
+                    else f"Updated MAP to {map_est}, entropy={agent._belief.entropy():.2f}b"
+                ) if isinstance(agent, BayesPlannerAgent) else "-",
             })
 
         if obs.clues:
@@ -233,6 +241,7 @@ def run_mission(
                     "type": f"clue_{cl.type}",
                     "raw_value": str(cl.value),
                     "info_gain_bits": gain,
+                    "status": "trusted",
                     "effect": f"Direct {cl.type} evidence at {cl.position}",
                 })
 
@@ -260,6 +269,7 @@ def run_mission(
                 decision=decision,
                 observation=obs,
                 belief=belief_ref,
+                is_suspicious=is_susp,
             )
 
     if logger is not None:

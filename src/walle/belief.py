@@ -190,19 +190,22 @@ def apply_observation(
     agent_pos: Tuple[int, int],
     info: PublicMissionInfo,
     incorporated_clue_ids: Optional[Set[int]] = None,
+    effective_prior: Optional[SensorPrior] = None,
 ) -> float:
     """Incorporate an observation into the belief and return total bits gained.
 
     Ensures clues are incorporated exactly once to prevent double-counting.
+    If effective_prior is provided, uses it instead of info.sensor_prior (e.g. for discounting).
     """
     total_gain = 0.0
+    prior = effective_prior if effective_prior is not None else info.sensor_prior
 
     # 1. Update from signal reading
     if obs.signal is not None:
         L_sig = build_signal_likelihood(
             reading=obs.signal,
             agent_pos=agent_pos,
-            prior=info.sensor_prior,
+            prior=prior,
             width=info.width,
             height=info.height,
             walls=info.walls,
@@ -221,7 +224,7 @@ def apply_observation(
                 clue_pos=clue.position,
                 clue_type=clue.type,
                 clue_value=clue.value,
-                prior=info.sensor_prior,
+                prior=prior,
                 width=info.width,
                 height=info.height,
                 walls=info.walls,

@@ -55,6 +55,7 @@ class TraceLogger:
         decision: Decision,
         observation: Observation,
         belief: Belief,
+        is_suspicious: bool = False,
     ) -> None:
         """Record a single step into JSONL, human text log, and periodic array frame."""
         # 1. Build observation representation
@@ -72,6 +73,7 @@ class TraceLogger:
                     else None
                 ),
                 "dropout": observation.signal.dropout,
+                "suspicious": is_suspicious,
             }
 
         obs_clues = [
@@ -148,8 +150,9 @@ class TraceLogger:
                 f"to {strategy_change['to']}: {strategy_change['trigger']}\n"
             )
 
+        decoy_tag = " [SUSPECTED DECOY]" if is_suspicious else ""
         sig_txt = (
-            f"STR={obs_sig['strength']:.3f} BRG={obs_sig['bearing_deg']:.1f}°"
+            f"STR={obs_sig['strength']:.3f} BRG={obs_sig['bearing_deg']:.1f}°{decoy_tag}"
             if obs_sig and obs_sig["strength"] is not None and obs_sig["bearing_deg"] is not None
             else ("DROPOUT" if obs_sig and obs_sig["dropout"] else "None")
         )

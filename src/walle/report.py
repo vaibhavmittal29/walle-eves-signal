@@ -128,6 +128,7 @@ def generate_report(
             "credible_region_hit": result.credible_hit,
         },
         "evidence_count": len(evidence_records),
+        "discounted_evidence_count": len([e for e in evidence_records if e.get("status") == "discounted"]),
         "strategy_transitions_count": len(strategy_history),
     }
 
@@ -170,15 +171,24 @@ def generate_report(
 Total pieces of evidence collected: **{len(evidence_records)}**.
 
 ### Top 5 Most Influential Observations:
-| Rank | Step | Type | Measured Value | Info Gain (bits) | Impact on Belief |
-|---|---|---|---|---|---|
+| Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
+|---|---|---|---|---|---|---|
 """
     for rank, ev in enumerate(top_5_evidence, start=1):
         md_content += (
             f"| {rank} | {ev.get('step', '-')} | `{ev.get('type', '-')}` | "
             f"`{ev.get('raw_value', '-')}` | **{ev.get('info_gain_bits', 0.0):.3f}** | "
-            f"{ev.get('effect', '-')} |\n"
+            f"`{ev.get('status', 'trusted')}` | {ev.get('effect', '-')} |\n"
         )
+
+    discounted_ev = [ev for ev in evidence_records if ev.get("status") == "discounted"]
+    if discounted_ev:
+        md_content += "\n### Discounted / Suspected Decoy Readings:\n"
+        for dev in discounted_ev:
+            md_content += (
+                f"- **Step {dev.get('step', '-')}**: `{dev.get('type', '-')}` (`{dev.get('raw_value', '-')}`) "
+                f"— status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).\n"
+            )
 
     md_content += """
 ---

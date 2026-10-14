@@ -4,8 +4,8 @@
     "seed": 99,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 111,
-    "ticks_used": 116
+    "total_steps": 113,
+    "ticks_used": 118
   },
   "final_answer": {
     "inferred_location": [
@@ -14,30 +14,30 @@
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 0.002717215905301857,
-      "low_power": 0.9935375901105795,
-      "damaged": 0.0037451939841189556
+      "active": 5.392354362771254e-07,
+      "low_power": 0.999927823273791,
+      "damaged": 7.163749077238362e-05
     },
-    "location_confidence": 0.987,
-    "status_confidence": 0.994,
+    "location_confidence": 1.0,
+    "status_confidence": 1.0,
     "credible_region_90": {
-      "cell_count": 2,
+      "cell_count": 1,
       "bounding_box": {
         "x_min": 19,
-        "y_min": 4,
+        "y_min": 5,
         "x_max": 19,
         "y_max": 5
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 127,
+    "battery_used": 130,
     "recharges_count": 5,
-    "distance_travelled": 87.0,
+    "distance_travelled": 88.0,
     "min_battery_margin": 4,
-    "time_ticks_used": 116
+    "time_ticks_used": 118
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (98.7%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       19,
@@ -49,6 +49,7 @@
     "success": true,
     "credible_region_hit": true
   },
-  "evidence_count": 19,
+  "evidence_count": 20,
+  "discounted_evidence_count": 0,
   "strategy_transitions_count": 6
 }
