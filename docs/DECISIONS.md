@@ -45,3 +45,9 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Plan Persistence**: Once a candidate viewpoint is selected, the agent executes the planned navigation leg towards the viewpoint before re-evaluating, preventing erratic dithering while moving.
 - **Physical Sensor Consistency**: When a directional bearing is observed, the likelihood of the target being directly on the agent's current cell ($d=0$) is set to 0.0, reflecting the physical reality that a directional bearing requires non-zero displacement.
 - **100-Seed Safety Invariant**: Across 100 randomized seeds, the agent successfully avoided getting stranded 100% of the time, guaranteeing zero battery exhaustion away from chargers.
+
+## Phase 6: Trace Logging & Mission Report Generation
+- **Trace Format**: Every action step emits exactly one JSONL record adhering to the schema in PLAN.md 5.11, accompanied by a clean human-readable line in `trace.txt`.
+- **Custom JSON Serializer**: Added `_json_default` in `trace.py` and `report.py` to seamlessly convert NumPy integer/float/array types into JSON-serializable primitives.
+- **Compressed Belief Frames**: Rather than bloating JSON traces with full probability grids, 2D belief marginals are saved to `belief_frames.npz` every 2 steps and on declaration for visualization.
+- **Rule-Based Recommendations**: Report generator synthesizes actionable next steps based on posterior concentration (confident direct dispatch vs. exploratory scans) and operational status (`low_power`/`damaged` rescue payloads).

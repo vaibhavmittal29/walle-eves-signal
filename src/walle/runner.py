@@ -7,14 +7,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
-from walle.actions import Action, ActionType
+from walle.actions import Action, ActionType, cost_of
 from walle.agent import BayesPlannerAgent, Decision
 from walle.baselines import GreedyBearingAgent, RandomAgent
+from walle.belief import Belief
 from walle.config import AppConfig, MissionSectionConfig, load_config
 from walle.environment import Environment
 from walle.geometry import distance
 from walle.observations import Observation, PublicMissionInfo
+from walle.planner import return_reserve
+from walle.report import generate_report
 from walle.signal_model import sample_signal
+from walle.trace import TraceLogger
 from walle.world import GroundTruth
 
 
@@ -127,8 +131,12 @@ def run_mission(
     # Reset agent with public info only
     agent.reset(info)
 
+    # Setup logger if out_dir requested
+    logger = TraceLogger(out_dir) if out_dir is not None else None
+
     # Tracking variables
     trace_records: List[Dict[str, Any]] = []
+    evidence_records: List[Dict[str, Any]] = []
     initial_battery = obs.battery
     prev_pos = obs.position
     distance_travelled = 0.0
@@ -137,12 +145,49 @@ def run_mission(
     declared_x, declared_y = obs.position
     declared_st = "active"
 
+    # Log initial signal as evidence item #0 if present
+    if obs.signal is not None and (obs.signal.strength is not None or obs.signal.bearing_deg is not None):
+        evidence_records.append({
+            "step": 0,
+            "type": "initial_signal",
+            "raw_value": f"str={obs.signal.strength}, brg={obs.signal.bearing_deg}°",
+            "info_gain_bits": 0.5,
+            "effect": f"Initial prior pointing along bearing {obs.signal.bearing_deg}°",
+        })
+
     while not obs.done:
         # Pre-step state capture
-        curr_bat = obs.battery
+        curr_step = obs.step + 1
+        curr_tick = cfg.resources.time_budget - obs.time_left
+        strat_name = agent._strategy.value if isinstance(agent, BayesPlannerAgent) else "SEARCH"
+        strat_changes_before = len(agent.strategy_change_log) if isinstance(agent, BayesPlannerAgent) else 0
+
+        # Calculate reserve
+        curr_res = return_reserve(
+            pos=obs.position,
+            chargers=info.chargers,
+            move_battery_cost=info.costs.move.battery,
+            margin_fraction=0.10,
+            margin_flat=3,
+            walls=info.walls,
+            width=info.width,
+            height=info.height,
+        )
+        state_before = {
+            "pos": [obs.position[0], obs.position[1]],
+            "battery": obs.battery,
+            "time_left": obs.time_left,
+            "reserve": curr_res,
+        }
 
         # Agent decision
         action, decision = agent.act(obs)
+
+        # Detect if strategy changed during this act() call
+        strat_change = None
+        if isinstance(agent, BayesPlannerAgent):
+            if len(agent.strategy_change_log) > strat_changes_before:
+                strat_change = agent.strategy_change_log[-1]
 
         if action.type == ActionType.DECLARE:
             declared_x = action.declare_x if action.declare_x is not None else obs.position[0]
@@ -152,7 +197,7 @@ def run_mission(
         # Step simulation
         obs = env.step(action)
 
-        # Post-step metric updates
+        # Metric updates
         if action.type == ActionType.RECHARGE and obs.action_succeeded:
             recharges_count += 1
 
@@ -160,12 +205,38 @@ def run_mission(
         distance_travelled += dist_step
         prev_pos = obs.position
 
-        # Track minimum battery margin
-        margin = obs.battery
-        if margin < min_battery_margin:
-            min_battery_margin = margin
+        if obs.battery < min_battery_margin:
+            min_battery_margin = obs.battery
 
-        # Build compact step record
+        # Evidence tracking
+        if obs.signal is not None:
+            gain = agent._belief.last_kl_divergence if isinstance(agent, BayesPlannerAgent) else 0.0
+            map_est = agent._belief.map_estimate() if isinstance(agent, BayesPlannerAgent) else (0, 0)
+            sig_val = (
+                f"str={obs.signal.strength:.3f}, brg={obs.signal.bearing_deg:.1f}°"
+                if obs.signal.strength is not None and obs.signal.bearing_deg is not None
+                else "DROPOUT"
+            )
+            evidence_records.append({
+                "step": obs.step,
+                "type": "scan_signal",
+                "raw_value": sig_val,
+                "info_gain_bits": gain,
+                "effect": f"Updated MAP to {map_est}, entropy={agent._belief.entropy():.2f}b" if isinstance(agent, BayesPlannerAgent) else "-",
+            })
+
+        if obs.clues:
+            for cl in obs.clues:
+                gain = agent._belief.last_kl_divergence if isinstance(agent, BayesPlannerAgent) else 0.0
+                evidence_records.append({
+                    "step": obs.step,
+                    "type": f"clue_{cl.type}",
+                    "raw_value": str(cl.value),
+                    "info_gain_bits": gain,
+                    "effect": f"Direct {cl.type} evidence at {cl.position}",
+                })
+
+        # Compact step record
         step_rec = {
             "step": obs.step,
             "action": action.type.value,
@@ -176,6 +247,23 @@ def run_mission(
             "reasoning": decision.reasoning,
         }
         trace_records.append(step_rec)
+
+        # Log step via TraceLogger
+        if logger is not None:
+            belief_ref = agent._belief if isinstance(agent, BayesPlannerAgent) else Belief(info)
+            logger.log_step(
+                step=curr_step,
+                tick=curr_tick,
+                strategy=strat_name,
+                strategy_change=strat_change,
+                state_before=state_before,
+                decision=decision,
+                observation=obs,
+                belief=belief_ref,
+            )
+
+    if logger is not None:
+        logger.close()
 
     # Post-mission ground truth evaluation
     gt = env.ground_truth()
@@ -189,7 +277,6 @@ def run_mission(
     if outcome == "timeout" and not (err <= 2.0 and st_correct):
         outcome = "forced_declare"
 
-    # Credible region check (if BayesPlannerAgent)
     credible_hit = False
     final_entropy = 0.0
     clues_found = 0
@@ -226,5 +313,17 @@ def run_mission(
         clues_found=clues_found,
         trace_records=trace_records,
     )
+
+    # Generate markdown and JSON report if out_dir specified
+    if out_dir is not None:
+        strat_history = agent.strategy_change_log if isinstance(agent, BayesPlannerAgent) else []
+        final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
+        generate_report(
+            result=result,
+            evidence_records=evidence_records,
+            strategy_history=strat_history,
+            out_dir=out_dir,
+            belief=final_belief,
+        )
 
     return result
