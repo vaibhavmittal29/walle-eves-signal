@@ -1,0 +1,54 @@
+{
+  "mission_summary": {
+    "config_name": "mission_easy",
+    "seed": 42,
+    "agent_type": "bayes_planner",
+    "outcome": "declared",
+    "total_steps": 20,
+    "ticks_used": 20
+  },
+  "final_answer": {
+    "inferred_location": [
+      6,
+      11
+    ],
+    "inferred_status": "active",
+    "status_probabilities": {
+      "active": 1.0,
+      "low_power": 1.9775004518810854e-18,
+      "damaged": 1.1123310684443543e-56
+    },
+    "location_confidence": 1.0,
+    "status_confidence": 1.0,
+    "credible_region_90": {
+      "cell_count": 1,
+      "bounding_box": {
+        "x_min": 6,
+        "y_min": 11,
+        "x_max": 6,
+        "y_max": 11
+      }
+    }
+  },
+  "resource_utilization": {
+    "battery_used": 21,
+    "recharges_count": 0,
+    "distance_travelled": 17.0,
+    "min_battery_margin": 79,
+    "time_ticks_used": 20
+  },
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (6, 11). Target localization confidence is high (100.0%).\n\n**Standard Protocol:** EVE status is inferred as 'active'. Proceed with standard direct wireless rendezvous and handshake protocol.",
+  "ground_truth_check": {
+    "true_location": [
+      6,
+      11
+    ],
+    "true_status": "active",
+    "location_error_cells": 0.0,
+    "status_correct": true,
+    "success": true,
+    "credible_region_hit": true
+  },
+  "evidence_count": 3,
+  "strategy_transitions_count": 3
+}

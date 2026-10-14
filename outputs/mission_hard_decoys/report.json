@@ -1,0 +1,54 @@
+{
+  "mission_summary": {
+    "config_name": "mission_hard_decoys",
+    "seed": 99,
+    "agent_type": "bayes_planner",
+    "outcome": "declared",
+    "total_steps": 111,
+    "ticks_used": 116
+  },
+  "final_answer": {
+    "inferred_location": [
+      19,
+      5
+    ],
+    "inferred_status": "low_power",
+    "status_probabilities": {
+      "active": 0.002717215905301857,
+      "low_power": 0.9935375901105795,
+      "damaged": 0.0037451939841189556
+    },
+    "location_confidence": 0.987,
+    "status_confidence": 0.994,
+    "credible_region_90": {
+      "cell_count": 2,
+      "bounding_box": {
+        "x_min": 19,
+        "y_min": 4,
+        "x_max": 19,
+        "y_max": 5
+      }
+    }
+  },
+  "resource_utilization": {
+    "battery_used": 127,
+    "recharges_count": 5,
+    "distance_travelled": 87.0,
+    "min_battery_margin": 4,
+    "time_ticks_used": 116
+  },
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (98.7%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "ground_truth_check": {
+    "true_location": [
+      19,
+      5
+    ],
+    "true_status": "low_power",
+    "location_error_cells": 0.0,
+    "status_correct": true,
+    "success": true,
+    "credible_region_hit": true
+  },
+  "evidence_count": 19,
+  "strategy_transitions_count": 6
+}

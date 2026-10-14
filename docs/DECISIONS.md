@@ -58,4 +58,8 @@ This document records all architectural choices, assumptions, and key decisions 
   - Panel 2: Energy Reserves curve (actual battery remaining vs. computed mandatory return reserve buffer).
   - Panel 3: Information Theoretic Convergence (joint Shannon entropy in bits on primary axis and spatial confidence percentage on secondary axis, annotated with strategy transition events).
 - **Post-Hoc Artifact Rendering**: Visualization (`walle viz`) runs independently on saved artifacts (`trace.jsonl`, `report.json`, and `belief_frames.npz`), ensuring zero re-simulation overhead during presentation generation.
-- **Animated GIF Dynamics**: Rendered with Pillow at ~6.6 fps, concluding with a 2-second hold on the final declared state.
+
+## Phase 8: Robustness, Edge Cases, & Hardening
+- **Edge-Case Matrix**: Implemented tests covering extreme scenarios including tiny battery (agent safely recharges or terminates without stranding), starting immediately adjacent to EVE, EVE placed in isolated wall alcoves, missions with completely disabled bearings, missions with zero status clues, and extreme sensor noise ($\sigma_d = 5.0, \sigma_\theta = 60^\circ$).
+- **200-Seed Fuzz Testing**: Automated Monte Carlo fuzz test running 200 randomized seeds across diverse world geometries. Guaranteed the core zero-stranding safety invariant (0% stranded across all 200 runs) with graceful degradation to timeout rather than stranding under tight budgets.
+- **Automated Sample Runner**: Created cross-platform bash (`scripts/run_all_samples.sh`) and PowerShell (`scripts/run_all_samples.ps1`) scripts to deterministically run and render sample missions across `mission_easy`, `mission_medium_seed7`, and `mission_hard_decoys`.
