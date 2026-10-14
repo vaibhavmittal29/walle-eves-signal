@@ -217,13 +217,22 @@ def build_signal_likelihood(
             norm_const_b = 1.0 / (np.sqrt(2.0 * math.pi) * sigma_b)
             L_b = norm_const_b * np.exp(-0.5 * (z_b ** 2))
 
-            # Directly on agent position, bearing is undefined -> neutral likelihood (1.0)
+            # Directly on agent position, bearing is undefined and cannot be measured
+            # A valid bearing observation implies target cannot be at distance 0
             ax, ay = agent_pos
             if 0 <= ax < width and 0 <= ay < height:
-                L_b[ay, ax] = 1.0
+                L_b[ay, ax] = 0.0
 
             for idx in range(3):
                 L[:, :, idx] *= L_b
+        elif not reading.dropout:
+            # Standing directly on target: bearing is undefined (None), but not dropout
+            ax, ay = agent_pos
+            L_at_target = np.zeros((height, width), dtype=np.float64)
+            if 0 <= ax < width and 0 <= ay < height:
+                L_at_target[ay, ax] = 1.0
+            for idx in range(3):
+                L[:, :, idx] *= L_at_target
 
     # Robust mixture model if assumed_spoof_rate > 0
     eps = prior.assumed_spoof_rate

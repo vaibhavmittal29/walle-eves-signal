@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import sys
+
+from walle.runner import run_mission
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,7 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     # run command
     run_parser = subparsers.add_parser("run", help="Run a mission simulation")
     run_parser.add_argument("--config", type=str, required=True, help="Path to YAML configuration")
+    run_parser.add_argument("--agent", type=str, default="bayes_planner", choices=["bayes_planner", "greedy_bearing", "random"], help="Agent type")
     run_parser.add_argument("--out", type=str, default="outputs", help="Output directory")
+    run_parser.add_argument("--seed", type=int, default=None, help="Optional mission seed override")
     run_parser.add_argument("--ascii", action="store_true", help="Print ASCII frames live")
 
     # viz command
@@ -40,6 +45,32 @@ def main(args: list[str] | None = None) -> int:
 
     if parsed_args.command is None:
         parser.print_help()
+        return 0
+
+    if parsed_args.command == "run":
+        print(f"\n[WALL-E] Launching mission: {parsed_args.config} (Agent: {parsed_args.agent})")
+        res = run_mission(
+            config_path=parsed_args.config,
+            agent_type=parsed_args.agent,
+            out_dir=parsed_args.out,
+            master_seed=parsed_args.seed,
+        )
+
+        print("\n" + "=" * 50)
+        print("MISSION RESULT SUMMARY")
+        print("=" * 50)
+        print(f"Config:              {res.config_name} (Seed: {res.seed})")
+        print(f"Outcome:             {res.outcome.upper()}")
+        print(f"Steps / Ticks:       {res.steps} steps / {res.ticks_used} ticks")
+        print(f"Battery Used:        {res.battery_used} (Recharges: {res.recharges_count})")
+        print(f"Min Battery Margin:  {res.min_battery_margin}")
+        print(f"Declared Location:   {res.declared_location} [True: {res.true_location}]")
+        print(f"Location Error:      {res.location_error:.2f} cells")
+        print(f"Declared Status:     '{res.declared_status}' [True: '{res.true_status}']")
+        print(f"Status Correct:      {res.status_correct}")
+        print(f"Credible Region Hit: {res.credible_hit}")
+        print(f"Mission Success:     {'SUCCESS' if res.success else 'FAILED'}")
+        print("=" * 50 + "\n")
         return 0
 
     print(f"WALL-E CLI: command '{parsed_args.command}' called.")
