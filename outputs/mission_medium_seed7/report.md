@@ -24,12 +24,12 @@
 Total pieces of evidence collected: **4**.
 
 ### Top 5 Most Influential Observations:
-| Rank | Step | Type | Measured Value | Info Gain (bits) | Impact on Belief |
-|---|---|---|---|---|---|
-| 1 | 22 | `scan_signal` | `str=0.596, brg=347.1°` | **3.937** | Updated MAP to (4, 12), entropy=4.07b |
-| 2 | 13 | `scan_signal` | `DROPOUT` | **1.230** | Updated MAP to (5, 14), entropy=8.85b |
-| 3 | 17 | `scan_signal` | `str=0.533, brg=163.5°` | **0.518** | Updated MAP to (4, 10), entropy=8.65b |
-| 4 | 0 | `initial_signal` | `str=0.16, brg=168.0°` | **0.500** | Initial prior pointing along bearing 168.0° |
+| Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
+|---|---|---|---|---|---|---|
+| 1 | 22 | `scan_signal` | `str=0.596, brg=347.1°` | **3.937** | `trusted` | Updated MAP to (4, 12), entropy=4.07b |
+| 2 | 13 | `scan_signal` | `DROPOUT` | **1.230** | `trusted` | Updated MAP to (5, 14), entropy=8.85b |
+| 3 | 17 | `scan_signal` | `str=0.533, brg=163.5°` | **0.518** | `trusted` | Updated MAP to (4, 10), entropy=8.65b |
+| 4 | 0 | `initial_signal` | `str=0.16, brg=168.0°` | **0.500** | `trusted` | Initial prior pointing along bearing 168.0° |
 
 ---
 

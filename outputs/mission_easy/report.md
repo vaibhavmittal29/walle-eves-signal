@@ -24,11 +24,11 @@
 Total pieces of evidence collected: **3**.
 
 ### Top 5 Most Influential Observations:
-| Rank | Step | Type | Measured Value | Info Gain (bits) | Impact on Belief |
-|---|---|---|---|---|---|
-| 1 | 17 | `scan_signal` | `str=0.901, brg=232.1°` | **3.090** | Updated MAP to (5, 9), entropy=3.00b |
-| 2 | 10 | `scan_signal` | `str=0.478, brg=122.0°` | **1.667** | Updated MAP to (4, 8), entropy=7.01b |
-| 3 | 0 | `initial_signal` | `str=0.17, brg=153.0°` | **0.500** | Initial prior pointing along bearing 153.0° |
+| Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
+|---|---|---|---|---|---|---|
+| 1 | 17 | `scan_signal` | `str=0.901, brg=232.1°` | **3.090** | `trusted` | Updated MAP to (5, 9), entropy=3.00b |
+| 2 | 10 | `scan_signal` | `str=0.478, brg=122.0°` | **1.667** | `trusted` | Updated MAP to (4, 8), entropy=7.01b |
+| 3 | 0 | `initial_signal` | `str=0.17, brg=153.0°` | **0.500** | `trusted` | Initial prior pointing along bearing 153.0° |
 
 ---
 

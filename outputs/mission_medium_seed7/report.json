@@ -50,5 +50,6 @@
     "credible_region_hit": true
   },
   "evidence_count": 4,
+  "discounted_evidence_count": 0,
   "strategy_transitions_count": 3
 }
