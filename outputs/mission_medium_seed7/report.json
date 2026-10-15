@@ -4,8 +4,8 @@
     "seed": 7,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 24,
-    "ticks_used": 24
+    "total_steps": 30,
+    "ticks_used": 30
   },
   "final_answer": {
     "inferred_location": [
@@ -14,30 +14,30 @@
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 7.923487488694469e-08,
-      "low_power": 0.9999999207439108,
-      "damaged": 2.1214067725290507e-11
+      "active": 0.00022650499693557105,
+      "low_power": 0.9997734636014703,
+      "damaged": 3.1401594090069416e-08
     },
-    "location_confidence": 1.0,
+    "location_confidence": 0.993,
     "status_confidence": 1.0,
     "credible_region_90": {
       "cell_count": 2,
       "bounding_box": {
         "x_min": 3,
-        "y_min": 11,
+        "y_min": 12,
         "x_max": 4,
         "y_max": 12
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 26,
+    "battery_used": 32,
     "recharges_count": 0,
-    "distance_travelled": 20.0,
-    "min_battery_margin": 74,
-    "time_ticks_used": 24
+    "distance_travelled": 26.0,
+    "min_battery_margin": 68,
+    "time_ticks_used": 30
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (99.3%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       4,

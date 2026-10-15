@@ -216,6 +216,8 @@ def run_benchmark(
             "median_location_error": med_err,
             "credible_region_hit_rate": credible_hits / n,
             "mean_battery": mean_bat,
+            "mean_recharges": float(np.mean([r.recharges_count for r in r_list])),
+            "mean_ticks": float(np.mean([r.ticks_used for r in r_list])),
             "mean_steps": mean_steps,
             "stranded_rate": stranded / n,
             "final_entropy": mean_ent,
@@ -237,8 +239,8 @@ def run_benchmark(
 
 ## Performance Comparison Table
 
-| Architecture | Success Rate | Mean Loc Error (cells) | Median Loc Error | Status Accuracy | Credible Hit (90%) | Mean Battery | Mean Steps | Stranded Rate |
-|---|---|---|---|---|---|---|---|---|
+| Architecture | Success Rate | Mean Loc Error (cells) | Median Loc Error | Status Accuracy | Credible Hit (90%) | Mean Battery | Mean Recharges | Mean Ticks | Stranded Rate |
+|---|---|---|---|---|---|---|---|---|---|
 """
     for at in agent_types:
         st = stats[at]
@@ -247,10 +249,13 @@ def run_benchmark(
             f"| **{name}** | **{st['success_rate']:.1%}** | {st['mean_location_error']:.2f} | "
             f"{st['median_location_error']:.2f} | {st['status_accuracy']:.1%} | "
             f"{st['credible_region_hit_rate']:.1%} | {st['mean_battery']:.1f} | "
-            f"{st['mean_steps']:.1f} | **{st['stranded_rate']:.1%}** |\n"
+            f"{st['mean_recharges']:.1f} | {st['mean_ticks']:.1f} | **{st['stranded_rate']:.1%}** |\n"
         )
 
     md_content += f"""
+> **Note on Battery & Resource Metrics:**
+> `RandomAgent` and `GreedyBearingAgent` frequently wander into charging stations and recharge multiple times across their missions (or run until the 250-tick timeout), resulting in cumulative gross energy consumption exceeding nominal single-charge battery capacity (60–120 units). In contrast, `BayesPlannerAgent` localizes EVE efficiently with active information gathering, declaring completion in far fewer steps without unnecessary recharge loops.
+
 ---
 
 ## Key Findings

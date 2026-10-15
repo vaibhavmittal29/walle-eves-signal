@@ -16,18 +16,18 @@
 - **90% Credible Region:**
   - Encompasses **1 cells**
   - Spatial Bounding Box: `[6, 11]` to `[6, 11]`
-- **Calibration Note:** In 90% of calibrated runs, EVE's true coordinate falls inside this region.
+- **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ---
 
 ## 3. Evidence Table
 Total pieces of evidence collected: **3**.
 
-### Top 5 Most Influential Observations:
+### Top Most Influential Observations:
 | Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
 |---|---|---|---|---|---|---|
-| 1 | 17 | `scan_signal` | `str=0.901, brg=232.1°` | **3.090** | `trusted` | Updated MAP to (5, 9), entropy=3.00b |
-| 2 | 10 | `scan_signal` | `str=0.478, brg=122.0°` | **1.667** | `trusted` | Updated MAP to (4, 8), entropy=7.01b |
+| 1 | 13 | `scan_signal` | `str=0.631, brg=168.9°` | **4.174** | `trusted` | Updated MAP to (6, 9), entropy=2.07b |
+| 2 | 17 | `scan_signal` | `str=0.901, brg=232.1°` | **3.751** | `trusted` | Updated MAP to (6, 11), entropy=0.16b |
 | 3 | 0 | `initial_signal` | `str=0.17, brg=153.0°` | **0.500** | `trusted` | Initial prior pointing along bearing 153.0° |
 
 ---
@@ -45,9 +45,9 @@ Total pieces of evidence collected: **3**.
 Chronological record of high-level autonomous strategy shifts:
 | Step | From Strategy | To Strategy | Trigger Rationale |
 |---|---|---|---|
-| 17 | `EXPLORE` | `TRACK` | location confidence 1.00 >= 0.50, switching to TRACK |
-| 18 | `TRACK` | `VERIFY` | location confidence 1.00 >= 0.75, switching to VERIFY |
-| 19 | `VERIFY` | `DECLARE` | location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
+| 17 | `EXPLORE` | `TRACK` | location confidence 1.00 >= 0.45, switching to TRACK |
+| 18 | `TRACK` | `VERIFY` | location confidence 1.00 >= 0.70, switching to VERIFY |
+| 19 | `VERIFY` | `DECLARE` | location conf 1.00 >= 0.85 and status conf 1.00 >= 0.65, DECLARING |
 
 ---
 

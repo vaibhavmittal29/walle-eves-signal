@@ -14,9 +14,9 @@
     ],
     "inferred_status": "active",
     "status_probabilities": {
-      "active": 1.0,
-      "low_power": 1.9775004518810854e-18,
-      "damaged": 1.1123310684443543e-56
+      "active": 0.9999999999999999,
+      "low_power": 8.064673656555194e-21,
+      "damaged": 2.0241084233945665e-64
     },
     "location_confidence": 1.0,
     "status_confidence": 1.0,

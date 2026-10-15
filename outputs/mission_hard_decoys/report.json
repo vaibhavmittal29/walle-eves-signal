@@ -4,52 +4,52 @@
     "seed": 99,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 113,
-    "ticks_used": 118
+    "total_steps": 120,
+    "ticks_used": 125
   },
   "final_answer": {
     "inferred_location": [
       19,
-      5
+      6
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 5.392354362771254e-07,
-      "low_power": 0.999927823273791,
-      "damaged": 7.163749077238362e-05
+      "active": 0.0004061502424401137,
+      "low_power": 0.9978800018338545,
+      "damaged": 0.001713847923705376
     },
-    "location_confidence": 1.0,
-    "status_confidence": 1.0,
+    "location_confidence": 0.962,
+    "status_confidence": 0.998,
     "credible_region_90": {
-      "cell_count": 1,
+      "cell_count": 2,
       "bounding_box": {
         "x_min": 19,
         "y_min": 5,
         "x_max": 19,
-        "y_max": 5
+        "y_max": 6
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 130,
+    "battery_used": 137,
     "recharges_count": 5,
-    "distance_travelled": 88.0,
+    "distance_travelled": 95.0,
     "min_battery_margin": 4,
-    "time_ticks_used": 118
+    "time_ticks_used": 125
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (96.2%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       19,
       5
     ],
     "true_status": "low_power",
-    "location_error_cells": 0.0,
+    "location_error_cells": 1.0,
     "status_correct": true,
     "success": true,
     "credible_region_hit": true
   },
   "evidence_count": 20,
-  "discounted_evidence_count": 0,
+  "discounted_evidence_count": 5,
   "strategy_transitions_count": 6
 }

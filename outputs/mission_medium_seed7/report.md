@@ -4,41 +4,41 @@
 - **Configuration:** `mission_medium` (Master Seed: `7`)
 - **Agent Architecture:** `bayes_planner` (Exact Bayesian Grid Filter + EIG Planner)
 - **Outcome:** **DECLARED**
-- **Duration:** 24 action steps (24 environment ticks)
+- **Duration:** 30 action steps (30 environment ticks)
 
 ---
 
 ## 2. Final Inferred Answer
 - **Inferred Location:** `(4, 12)`
-- **Location Confidence:** 100.0% mass within 1.5-cell radius
+- **Location Confidence:** 99.3% mass within 1.5-cell radius
 - **Inferred Status:** `low_power` (Confidence: 100.0%)
 - **Status Probabilities:** `active`: 0.0%, `low_power`: 100.0%, `damaged`: 0.0%
 - **90% Credible Region:**
   - Encompasses **2 cells**
-  - Spatial Bounding Box: `[3, 11]` to `[4, 12]`
-- **Calibration Note:** In 90% of calibrated runs, EVE's true coordinate falls inside this region.
+  - Spatial Bounding Box: `[3, 12]` to `[4, 12]`
+- **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ---
 
 ## 3. Evidence Table
 Total pieces of evidence collected: **4**.
 
-### Top 5 Most Influential Observations:
+### Top Most Influential Observations:
 | Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
 |---|---|---|---|---|---|---|
-| 1 | 22 | `scan_signal` | `str=0.596, brg=347.1°` | **3.937** | `trusted` | Updated MAP to (4, 12), entropy=4.07b |
-| 2 | 13 | `scan_signal` | `DROPOUT` | **1.230** | `trusted` | Updated MAP to (5, 14), entropy=8.85b |
-| 3 | 17 | `scan_signal` | `str=0.533, brg=163.5°` | **0.518** | `trusted` | Updated MAP to (4, 10), entropy=8.65b |
-| 4 | 0 | `initial_signal` | `str=0.16, brg=168.0°` | **0.500** | `trusted` | Initial prior pointing along bearing 168.0° |
+| 1 | 22 | `scan_signal` | `str=0.392, brg=347.2°` | **4.876** | `trusted` | Updated MAP to (6, 15), entropy=4.34b |
+| 2 | 27 | `scan_signal` | `str=0.581, brg=301.0°` | **3.087** | `trusted` | Updated MAP to (4, 12), entropy=1.20b |
+| 3 | 0 | `initial_signal` | `str=0.0674419154557822, brg=172.9981741787147°` | **0.500** | `trusted` | Initial prior pointing along bearing 172.9981741787147° |
+| 4 | 19 | `scan_signal` | `DROPOUT` | **0.321** | `trusted` | Updated MAP to (4, 15), entropy=8.94b |
 
 ---
 
 ## 4. Resource Utilization
-- **Battery Consumed:** 26 energy units
+- **Battery Consumed:** 32 energy units
 - **Recharge Cycles:** 0 station dockings
-- **Minimum Energy Margin:** 74 battery units remaining (Safe Return guaranteed)
-- **Total Distance Travelled:** 20.0 cells
-- **Time Budget Consumed:** 24 ticks
+- **Minimum Energy Margin:** 68 battery units remaining (Safe Return guaranteed)
+- **Total Distance Travelled:** 26.0 cells
+- **Time Budget Consumed:** 30 ticks
 
 ---
 
@@ -46,14 +46,14 @@ Total pieces of evidence collected: **4**.
 Chronological record of high-level autonomous strategy shifts:
 | Step | From Strategy | To Strategy | Trigger Rationale |
 |---|---|---|---|
-| 17 | `EXPLORE` | `TRACK` | location confidence 0.64 >= 0.50, switching to TRACK |
-| 22 | `TRACK` | `VERIFY` | location confidence 1.00 >= 0.75, switching to VERIFY |
-| 23 | `VERIFY` | `DECLARE` | location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
+| 27 | `EXPLORE` | `TRACK` | location confidence 0.99 >= 0.50, switching to TRACK |
+| 28 | `TRACK` | `VERIFY` | location confidence 0.99 >= 0.75, switching to VERIFY |
+| 29 | `VERIFY` | `DECLARE` | location conf 0.99 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
 
 ---
 
 ## 6. Recommended Next Step
-**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (100.0%).
+**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (99.3%).
 
 **Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.
 
