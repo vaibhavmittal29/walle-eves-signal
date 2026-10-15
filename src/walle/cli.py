@@ -28,7 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # viz command
     viz_parser = subparsers.add_parser("viz", help="Render visuals from a saved run")
-    viz_parser.add_argument("--run", type=str, required=True, help="Directory containing run artifacts")
+    viz_parser.add_argument("run_pos", nargs="?", default=None, help="Directory containing run artifacts (positional)")
+    viz_parser.add_argument("--run", type=str, default=None, help="Directory containing run artifacts")
 
     # benchmark command
     bench_parser = subparsers.add_parser("benchmark", help="Run generalization benchmark")
@@ -76,8 +77,11 @@ def main(args: list[str] | None = None) -> int:
         return 0
 
     if parsed_args.command == "viz":
-        print(f"\n[WALL-E Viz] Generating summary and animation from {parsed_args.run}...")
-        summary_p, gif_p = generate_visuals_from_run(parsed_args.run)
+        target_run = parsed_args.run or parsed_args.run_pos
+        if not target_run:
+            parser.error("walle viz requires a run directory (e.g. 'walle viz outputs/mission_medium_seed7' or '--run outputs/mission_medium_seed7')")
+        print(f"\n[WALL-E Viz] Generating summary and animation from {target_run}...")
+        summary_p, gif_p = generate_visuals_from_run(target_run)
         print(f"Saved summary frame: {summary_p}")
         print(f"Saved animated GIF:  {gif_p}\n")
         return 0
