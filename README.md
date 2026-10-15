@@ -11,7 +11,7 @@
 
 ## 1. Project Overview
 
-**WALL-E and EVE's Signal** is an autonomous search and inference agent that navigates an unknown, obstacle-cluttered 2D grid world to localize a hidden target (EVE) and infer her operational health (`active`, `low_power`, or `damaged`). Operating under finite battery and strict time limits, WALL-E starts with only a noisy initial radio ping and must discover clues and sensory signals exclusively through active environmental interaction.
+**WALL-E and EVE's Signal** is an autonomous search and inference agent that navigates a known 2D grid world with obstacles and charging stations to localize a hidden target (EVE) and infer her operational health (`active`, `low_power`, or `damaged`). While the map layout (boundaries, obstacles, and charger locations) is provided to the agent in advance, WALL-E starts with only a noisy initial radio ping and must discover EVE, her operational status, and all physical clues exclusively through active environmental interaction.
 
 Instead of reactive heuristics or opaque black-box policies, WALL-E utilizes an **exact joint Bayesian filter** ($B[y, x, k]$) coupled with a **receding-horizon information-theoretic planner**. The planner dynamically prioritizes orthogonal viewpoints to rapidly triangulate EVE, discounts deceptive decoy signals using a robust mixture likelihood, and mathematically enforces a **Zero-Stranding Invariant**—guaranteeing that WALL-E can always reach a recharging station before depleting its battery.
 
@@ -29,7 +29,7 @@ Every portal and task specification is mapped directly to implementation modules
 | **4** | Full action trace: actions, observations, decisions, and reasoning | [`src/walle/trace.py`](src/walle/trace.py) | Schema-validated [`trace.jsonl`](outputs/mission_medium_seed7/trace.jsonl) and human-readable [`trace.txt`](outputs/mission_medium_seed7/trace.txt) |
 | **5** | Comprehensive mission report with evidence, confidence, and next steps | [`src/walle/report.py`](src/walle/report.py) | 8-section Markdown report [`report.md`](outputs/mission_medium_seed7/report.md) and structured [`report.json`](outputs/mission_medium_seed7/report.json) |
 | **B1** | Visualization of trajectory, landmarks, belief, and strategy changes | [`src/walle/viz.py`](src/walle/viz.py) | ASCII renderer, 3-panel Matplotlib frame summary [`summary.png`](outputs/mission_medium_seed7/summary.png), and animated [`run.gif`](outputs/mission_medium_seed7/run.gif) |
-| **B2** | Robustness to deceptive decoy transmitters and noisy sensors | [`src/walle/signal_model.py`](src/walle/signal_model.py), [`agent.py`](src/walle/agent.py) | Contradiction detection (>3$\sigma$), decoy confirmation scans, and 50-seed ablation study in [`outputs/ablation_decoys.csv`](outputs/ablation_decoys.csv) |
+| **B2** | Robustness to deceptive decoy transmitters and noisy sensors | [`src/walle/signal_model.py`](src/walle/signal_model.py), [`agent.py`](src/walle/agent.py) | Contradiction detection ($|\hat{\theta} - \theta_{\text{obs}}| > \max(3\sigma_b, 45^\circ)$), decoy confirmation scans, and 50-seed ablation study in [`outputs/ablation_decoys.csv`](outputs/ablation_decoys.csv) |
 | **B3** | Generalization benchmark across randomized environments | [`src/walle/benchmark.py`](src/walle/benchmark.py) | $N=100$ mission evaluation in [`benchmark_results.csv`](outputs/benchmark/benchmark_results.csv) and [`benchmark_chart.png`](outputs/benchmark/benchmark_chart.png) |
 | **B4** | Classical Bayesian planner vs. reactive and random baselines | [`src/walle/baselines.py`](src/walle/baselines.py), [`benchmark.py`](src/walle/benchmark.py) | Head-to-head comparison table against `RandomAgent` and `GreedyBearingAgent` |
 | **B5** | Continuous physics simulation (Gazebo / Webots) | *Out of Scope* | Acknowledged honestly in Section 9 (discrete grid formulation chosen for exact Bayesian convergence guarantees) |
@@ -85,7 +85,10 @@ python -m walle viz --run outputs/mission_medium_seed7
 ### 3.4 Running the Test Suite & Benchmark
 
 ```bash
-# Run unit, integration, invariant, and determinism tests (60 tests, ~75s)
+# Run the full test suite including Monte Carlo fuzz tests (74 passed in ~461s)
+pytest -q
+
+# Or run fast unit/integration tests excluding long fuzzing (73 passed in ~45s)
 pytest -v -k "not test_fuzz_200_random_configs"
 
 # Run the 100-mission head-to-head generalization benchmark across all 3 agents
@@ -260,10 +263,10 @@ This formulation mathematically favors viewpoints that provide orthogonal triang
 Every step emits a structured JSONL record and a human-readable text line:
 
 ```text
-[step 012 | tick 024 | TRACK  ] POS=(4, 8) BAT=076 RES=14 -> ACTION=SCAN_SIGNAL
-       REASON: Entropy 4.12 bits; best goal SCAN_SIGNAL@(4, 8) gives 1.15 bits (cost 2 bat); reserve 14 satisfied (76-2=74).
-       OBS:    POS=(4, 8) BAT=074 BUMP=False SIG=[STR=0.521 BRG=78.2°] CLUES=[None]
-       BELIEF: MAP=(4, 12) P=0.7420 ENTROPY=2.87b CONF=0.81 STATUS={'active': 0.08, 'low_power': 0.89, 'damaged': 0.03}
+[step 027 | tick 026 | EXPLORE] POS=[5, 13] BAT=072 RES=19 -> ACTION=SCAN_SIGNAL
+       REASON: Executing plan towards GO_TO@(5, 13)->SCAN; reserve 19 satisfied (72-2=70).
+       OBS:    POS=[5, 13] BAT=070 BUMP=False SIG=[STR=0.581 BRG=301.0°] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.6837 ENTROPY=1.20b CONF=0.99 STATUS={'active': 0.0002, 'low_power': 0.9998, 'damaged': 0.0}
 ```
 
 ### 7.2 Mission Report (`report.md`)
@@ -273,14 +276,19 @@ At mission conclusion, WALL-E compiles an 8-section Markdown report:
 ```markdown
 # WALL-E Mission Report: mission_medium
 ## 2. Final Inferred Answer
-- **Inferred Location:** `(4, 12)` [Ground Truth: `(4, 12)` - Error: 0.00 cells]
-- **Location Confidence:** 96.4% mass within 1.5-cell radius
-- **Inferred Status:** `low_power` (Confidence: 94.2%)
-- **90% Credible Region:** 3 cells enclosed (Truth inside region: **YES**)
+- **Inferred Location:** `(4, 12)`
+- **Location Confidence:** 99.3% mass within 1.5-cell radius
+- **Inferred Status:** `low_power` (Confidence: 100.0%)
+- **Status Probabilities:** `active`: 0.0%, `low_power`: 100.0%, `damaged`: 0.0%
+- **90% Credible Region:**
+  - Encompasses **2 cells**
+  - Spatial Bounding Box: `[3, 12]` to `[4, 12]`
+- **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ## 6. Recommended Next Step
-Dispatch WALL-E directly to target coordinates (4, 12). Shortest path: 8 steps (estimated energy: 8 units).
-Operational health indicates 'low_power' status (94.2% certainty); deploy rescue team with a mobile charging payload.
+**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (99.3%).
+
+**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.
 ```
 
 ---
@@ -304,13 +312,16 @@ Evaluated across 100 distinct random worlds (varying grid dimensions $12\times 1
 
 ![Benchmark Comparison Chart](outputs/benchmark/benchmark_chart.png)
 
-| Architecture | Success Rate ($\le 2$ cells & status) | Mean Loc Error (cells) | Median Loc Error | Status Accuracy | 90% Credible Hit | Mean Battery Consumed | Stranded Rate |
-|---|---|---|---|---|---|---|---|
-| **Random Agent** | 3.0% | 9.98 | 9.22 | 28.0% | 0.0% | 865.7 | **0.0%** |
-| **Greedy Bearing Agent** | 6.0% | 6.19 | 3.16 | 28.0% | 0.0% | 944.1 | **0.0%** |
-| **Bayes Planner Agent (Ours)** | **98.0%** | **0.26** | **0.00** | **100.0%** | **94.0%** | **36.3** | **0.0%** |
+| Architecture | Success Rate | Mean Loc Error (cells) | Median Loc Error | Status Accuracy | Credible Hit (90%) | Mean Battery | Mean Recharges | Mean Ticks | Stranded Rate |
+|---|---|---|---|---|---|---|---|---|---|
+| **Random Agent** | **3.0%** | 9.98 | 9.22 | 28.0% | 0.0% | 865.7 | 42.0 | 137.5 | **0.0%** |
+| **Greedy Bearing Agent** | **6.0%** | 6.19 | 3.16 | 28.0% | 0.0% | 944.1 | 46.0 | 202.8 | **0.0%** |
+| **Bayes Planner Agent (Ours)** | **99.0%** | 0.30 | 0.00 | 100.0% | 95.0% | 37.6 | 0.3 | 34.3 | **0.0%** |
 
-*Key Takeaway: The Bayesian Planner achieves a **98.0% success rate** with **0.26 cells mean error** (median 0.00 cells), consuming only **36.3 battery units** on average, while completely avoiding stranding (0.0%).*
+> **Note on Battery & Resource Metrics:**  
+> `RandomAgent` and `GreedyBearingAgent` wander into charging stations and recharge multiple times across their missions (or run until the 250-tick timeout), resulting in cumulative gross energy consumption exceeding nominal single-charge battery capacity (60–120 units). In contrast, `BayesPlannerAgent` localizes EVE efficiently with active information gathering, declaring completion in far fewer steps without unnecessary recharge loops.
+
+*Key Takeaway: The Bayesian Planner achieves a **99.0% success rate** with **0.30 cells mean error** (median 0.00 cells), consuming only **37.6 battery units** on average across 34.3 ticks, while completely avoiding stranding (0.0%).*
 
 ---
 
@@ -320,23 +331,28 @@ Tested on [`configs/mission_hard_decoys.yaml`](configs/mission_hard_decoys.yaml)
 
 | Metric | Naive Planner ($\epsilon = 0.0$) | Robust Planner ($\epsilon = 0.15$) | Delta (Robust vs. Naive) |
 |---|---|---|---|
-| **Mission Success Rate** | 62.0% | **92.0%** | **+30.0%** |
-| **Mean Location Error** | 2.03 cells | **1.26 cells** | **-0.77 cells** |
-| **Median Location Error** | 1.00 cell | **0.00 cells** | **-1.00 cell** |
-| **Status Classification Accuracy** | 74.0% | **94.0%** | **+20.0%** |
+| **Mission Success Rate** | 68.0% | **90.0%** | **+22.0%** |
+| **Mean Location Error** | 2.47 cells | **1.02 cells** | **-1.45 cells** |
+| **Mean Battery Consumed** | 65.1 units | **74.6 units** | **+9.5 units** |
 | **Stranded Rate** | **0.0%** | **0.0%** | **0.0%** |
 
 ---
 
 ## 9. Design Decisions & Limitations
 
-1. **Discrete 2D Grid Representation**:
-   - *Rationale*: A discrete grid enables exact, non-approximated Bayesian posterior updates without particle depletion or mode collapse.
-   - *Limitation*: Does not model continuous non-holonomic vehicle kinematics (e.g., Ackermann steering or velocity profiles).
-2. **Static EVE Formulation**:
-   - *Rationale*: In the primary task scenario, EVE is immobile awaiting rescue. (Drift convolution for random-walk targets is implemented as an optional extension in `Belief.predict()`).
-3. **No External Physics Engine**:
-   - *Rationale*: Physics simulators (Gazebo/Webots) introduce heavyweight C++ dependencies and non-determinism without adding algorithmic value to the core AI/ML active perception challenge.
+1. **Prior Map Knowledge**:
+   - *Design Choice*: The static layout of walls and charging stations is provided in advance. This allows caching 4-connected BFS shortest paths to compute exact dynamic safe-return reserves.
+   - *Limitation*: In unmapped exploration scenarios, the agent would need to interleave simultaneous localization and mapping (SLAM) with frontier exploration.
+2. **Discrete 2D Grid Formulation**:
+   - *Rationale*: A discrete grid enables exact, non-approximated Bayesian posterior updates over $H \times W \times 3$ states without particle depletion or mode collapse.
+   - *Limitation*: Continuous non-holonomic vehicle kinematics (e.g. Ackermann steering) and sub-cell interpolation are not modeled.
+3. **Sensor Noise Modeling & Empirical Calibration**:
+   - *Rationale*: Observation models assume stationary Gaussian noise with distance-dependent standard deviation.
+   - *Empirical Verification*: A 200-mission calibration study ([`outputs/calibration.md`](outputs/calibration.md)) confirms the posterior is well-calibrated, with nominal 90% credible regions enclosing the ground truth in 93.0% of runs.
+4. **Static Target Assumption**:
+   - *Rationale*: In the primary task scenario, EVE is immobile awaiting rescue. (Drift convolution for moving targets is implemented in `Belief.predict()` and verified in tests).
+5. **No External Physics Engine**:
+   - *Rationale*: Physics simulators (Gazebo/Webots) introduce heavyweight dependencies without adding algorithmic value to the core active perception and decision-theoretic challenge.
 
 ---
 
@@ -351,7 +367,7 @@ Tested on [`configs/mission_hard_decoys.yaml`](configs/mission_hard_decoys.yaml)
 ## 11. Project Structure & Testing
 
 ```text
-walle-eve-signal/
+walle-eves-signal/
 ├── configs/                     # Mission profiles
 │   ├── mission_easy.yaml        # Small 12x12 starter mission
 │   ├── mission_medium.yaml      # Standard 20x20 benchmark mission
@@ -364,11 +380,13 @@ walle-eve-signal/
 │   ├── mission_easy/            # Easy run traces, reports, PNG, GIF
 │   ├── mission_medium_seed7/    # Medium reference run
 │   ├── mission_hard_decoys/     # Hard decoy run
+│   ├── calibration.md           # 200-mission empirical calibration table
 │   └── benchmark/               # Benchmark CSV, summary MD, chart PNG
 ├── scripts/                     # Cross-platform runner utilities
 │   ├── run_all_samples.sh       # Bash sample generator
 │   ├── run_all_samples.ps1      # PowerShell sample generator
 │   ├── ablation_decoys.py       # 50-seed decoy ablation study
+│   ├── calibration_study.py     # 200-seed empirical calibration analysis
 │   ├── belief_demo.py           # Belief convergence visualizer
 │   └── manual_play.py           # Interactive CLI simulator
 ├── src/walle/                   # Source package
@@ -390,17 +408,23 @@ walle-eve-signal/
 │   ├── strategies.py            # Strategy state machine and utility weights
 │   ├── trace.py                 # JSONL and text trace loggers
 │   └── viz.py                   # ASCII, Matplotlib 3-panel, and GIF engine
-└── tests/                       # Unit and integration test suite (60+ tests)
+└── tests/                       # Unit and integration test suite (74 tests)
+    ├── test_agent_config_influence.py # Configuration overrides test
     ├── test_agent_invariants.py # 100-seed safety test (0% stranded)
     ├── test_belief.py           # Triangulation convergence and entropy tests
     ├── test_benchmark.py        # Benchmark harness execution and determinism
+    ├── test_clue_incorporation.py # Clue incorporation and idempotence tests
     ├── test_config.py           # Configuration schema validation tests
     ├── test_decoys_robustness.py# Contradiction detection and mixture tests
     ├── test_determinism.py      # Seed repeatability tests
+    ├── test_entropy_consistency.py # Entropy vs confidence invariant tests
     ├── test_environment.py     # Simulator physics, costs, recharge tests
     ├── test_geometry.py        # Compass angle and wrapping tests
+    ├── test_plan_persistence.py # 15% replanning rule tests
     ├── test_planner.py         # BFS reachability and reserve monotonicity
+    ├── test_random_walk_mobility.py # Dynamic target motion tests
     ├── test_robustness_fuzz.py  # 200-seed Monte Carlo fuzz tests
+    ├── test_scan_area_radii.py  # Multi-radius SCAN_AREA candidate tests
     ├── test_separation.py       # Static AST check enforcing public/private separation
     ├── test_signal_model.py     # Statistical validation of sensor distributions
     ├── test_trace_report.py     # JSONL schema and 8-section report tests
@@ -410,7 +434,10 @@ walle-eve-signal/
 
 ### Running Tests
 ```bash
-# Run all unit tests
+# Run the complete test suite (74 passed in ~461s)
+pytest -q
+
+# Run all unit/integration tests excluding long fuzzing (73 passed in ~45s)
 pytest -v -k "not test_fuzz_200_random_configs"
 
 # Run the strict architectural separation test
@@ -422,7 +449,7 @@ pytest -v tests/test_agent_invariants.py::test_safety_property_100_seeds_never_s
 
 ---
 
-## 11. Author & License
+## 12. Author & License
 
 - **Author:** Vaibhav Mittal ([@vaibhavmittal29](https://github.com/vaibhavmittal29) | [vaibhavmittalwork@gmail.com](mailto:vaibhavmittalwork@gmail.com))
 - **License:** [MIT License](LICENSE) &copy; 2026 Vaibhav Mittal

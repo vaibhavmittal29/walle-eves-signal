@@ -69,15 +69,26 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Contradiction Detection (>3$\sigma$)**: Signals arriving with angular error exceeding $3\sigma_\theta$ (and $> 45^\circ$) relative to the current confident MAP hypothesis are flagged as `is_suspicious` (suspected decoy).
 - **Confirmation Scans & Decoy Discounting**: Suspected decoys are heavily discounted via mixture attenuation, and the agent schedules an immediate confirmation scan from an orthogonal viewpoint ($45^\circ - 135^\circ$ angular separation) before trusting the hypothesis. Final declaration is deferred while confirmation is pending.
 - **Evidence Labeling**: Traces log `"suspicious": true`, and mission reports categorize readings as `discounted` in the Evidence Table with explanations.
-- **50-Seed Ablation Proof**: Over 50 randomized seeds on `mission_hard_decoys` ($\text{noise\_scale}=1.5$, 2 decoys, $15\%$ spoof rate):
-  - Naive Agent ($\epsilon=0.0$): 62.0% Success Rate, 2.03 cells mean error.
-  - Robust Agent ($\epsilon=0.15$): **92.0% Success Rate** (+30.0% gain), **1.26 cells mean error** (median 0.00 cells), 94.0% status accuracy (+20.0% gain), and 0.0% stranded rate.
+- **50-Seed Ablation Proof**: Over 50 randomized seeds on `mission_hard_decoys` ($\text{noise\_scale}=1.5$, 2 decoys, $15\%$ spoof rate, $10\%$ false clues):
+  - Naive Agent ($\epsilon=0.0$): 68.0% Success Rate, 2.47 cells mean error.
+  - Robust Agent ($\epsilon=0.15$): **90.0% Success Rate** (+22.0% gain), **1.02 cells mean error** (median 0.00 cells), and 0.0% stranded rate.
 
 ## Phase 10: Bonus B - Benchmark & Baseline Comparison
 - **Automated Randomized Mission Generator**: Generates $N$ reproducible benchmark missions sampling grid sizes $12 \times 12$ to $24 \times 24$, obstacle densities $0.04$ to $0.16$, battery capacities $60$ to $120$, and sensor noise scales $0.8$ to $1.5$.
 - **Fair Head-to-Head Architecture Evaluation**: Tested `RandomAgent`, `GreedyBearingAgent`, and `BayesPlannerAgent` against identical worlds, ground truths, and initial signals.
 - **Artifact Pipeline**: Exports raw metrics to `outputs/benchmark/benchmark_results.csv`, synthesizes `outputs/benchmark/benchmark_summary.md`, and renders a publication-quality 4-panel visual chart `outputs/benchmark/benchmark_chart.png`.
 - **100-Mission Benchmark Findings**:
-  - `BayesPlannerAgent` achieved a **98.0% success rate** with **0.26 cells mean error** (median 0.00 cells) and **100.0% status accuracy**, compared to 6.0% for greedy bearing pursuit and 3.0% for random exploration.
-  - Resource conservation: `BayesPlannerAgent` consumed an average of only **36.3 battery units** and **32.5 steps**, while non-Bayesian baselines wandered in loops exceeding 860+ energy units.
+  - `BayesPlannerAgent` achieved a **99.0% success rate** with **0.30 cells mean error** (median 0.00 cells) and **100.0% status accuracy**, compared to 6.0% for greedy bearing pursuit and 3.0% for random exploration.
+  - Resource conservation: `BayesPlannerAgent` consumed an average of only **37.6 battery units** across **34.3 ticks** (0.3 recharge dockings), while non-Bayesian baselines wandered in loops exceeding 860+ energy units and 40+ recharge cycles.
   - 0% stranded invariant preserved unconditionally across all 3 architectures.
+
+## Phase 11: Correctness Audit & Algorithmic Hardening
+- **A1 Clue Incorporation Bugfix**: Fixed ordering in `agent.py` so clue IDs are not pre-added to `_incorporated_clue_ids` prior to calling `apply_observation()`. Clue discovery count is derived directly from the incorporated clue set after update, and idempotence is verified.
+- **A2 Configurable Parameters**: Removed hardcoded threshold dictionaries and safety margin literals from `agent.py`. All thresholds, safety parameters (`margin_fraction`, `margin_flat`), `assumed_spoof_rate`, `expected_clues`, and `drift_sigma` are dynamically passed from `AppConfig` via `PublicMissionInfo`. When clue count is not explicitly set in config, it falls back cleanly to public mission clues or default 5.
+- **A3 Multi-Radius SCAN_AREA**: Extended `SCAN_AREA` candidate generation to evaluate radii $r \in \{1, 2, 3\}$ as distinct options, with radius-dependent energy costs $(2 + 2r)$ and time $(1 + r)$, subject to full safe-return verification.
+- **A4 Plan Persistence & Re-planning**: Implemented the spec rule: retain current plan unless (a) action is unsafe, (b) strategy changed, (c) a new signal reading or clue was observed, or (d) a newly evaluated candidate utility exceeds current plan utility by $> 15\%$.
+- **A5 Pure NumPy Separable Gaussian Convolution**: Replaced external dependency `scipy.ndimage.gaussian_filter` with pure NumPy separable 1D Gaussian kernel convolution ($R = \lceil 3\sigma \rceil$), with wall-aware masking and mass renormalization. Added random walk target motion in simulation.
+- **A6 Synchronous Observation Logging**: Aligned `runner.py` observation ingestion immediately following `env.step()`, ensuring logged belief entropy and confidence metrics are always synchronous with the latest observation.
+- **A7 Empirical Calibration**: Evaluated 200 randomized missions, confirming 93.0% empirical coverage for nominal 90% credible regions, with zero overconfidence.
+- **A8 Truly Naive Ablation**: Disabled contradiction detection and delayed declarations when `assumed_spoof_rate == 0.0`, ensuring fair ablation comparisons.
+- **A9 Evidence Reporting & Honesty**: Replaced fixed calibration claims with dynamic empirical metrics, counted all physical clues in total evidence, and added full clue attribution rows with information gain bits.

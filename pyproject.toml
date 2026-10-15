@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "walle-eve-signal"
+name = "walle-eves-signal"
 version = "0.1.0"
 description = "Autonomous Active Bayesian Search Agent for WALL-E and EVE's Signal"
 readme = "README.md"
@@ -18,6 +18,11 @@ dependencies = [
     "matplotlib>=3.7.0",
     "pillow>=9.5.0",
     "imageio>=2.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.0",
 ]
 
 [project.urls]

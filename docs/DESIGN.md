@@ -73,6 +73,11 @@ When spoofing rate $\epsilon > 0$:
 $$L_{\text{robust}}[y, x, k] = (1 - \epsilon) L_{\text{sensor}}[y, x, k] + \epsilon \cdot \frac{1}{|FreeCells| \times 3}$$
 This guarantees a uniform probability floor, preventing anomalous decoy readings from collapsing the posterior on the true target cell.
 
+#### Decoy Contradiction Detection Rule
+Signals arriving with angular divergence exceeding a $3\sigma$ confidence bound and at least $45^\circ$ from the MAP hypothesis:
+$$\text{Contradiction}(\theta_{\text{obs}}, \hat{\theta}) \iff |\Delta\theta| > \max(3.0 \cdot \sigma_\theta(d_{\text{MAP}}), 45.0^\circ)$$
+When detected and $\epsilon > 0$, the reading is flagged as suspicious, attenuated via mixture likelihood, and a confirmation scan from an orthogonal baseline is scheduled before declaration. When $\epsilon = 0.0$ (naive mode), contradiction handling and delayed declarations are deactivated.
+
 ---
 
 ### 2.3 Safe-Return Invariant & Dynamic Battery Reserves
@@ -84,7 +89,7 @@ Let:
 - $D(p, c)$ be the 4-connected shortest-path distance (computed via BFS) from cell $p$ to charger $c$.
 - $c^*(p) = \arg\min_{c \in C} D(p, c)$ be the nearest charger.
 - $k_{\text{move}}$ be the battery cost per movement step (default 1 unit).
-- $\alpha = 0.10$ (10% safety margin fraction) and $\beta = 3$ (flat reserve margin units).
+- $\alpha = 0.10$ (safety margin fraction) and $\beta = 3$ (flat reserve margin units), configurable per mission.
 
 The **Dynamic Return Reserve** $R(p)$ is defined as:
 $$R(p) = \left\lceil D(p, c^*(p)) \cdot k_{\text{move}} \cdot (1 + \alpha) + \beta \right\rceil$$
@@ -111,13 +116,13 @@ Since the measurement space is continuous and multimodal, we approximate $\text{
 5. $\text{EIG}_{\text{signal}}(p) = \max(0.0, H(B) - \bar{H})$ bits.
 
 #### Area Scan Information Gain Proxy
-For clue detection via `SCAN_AREA(r)`:
+For clue detection via `SCAN_AREA(r)` across discrete radii $r \in \{1, 2, 3\}$:
 $$\text{EIG}_{\text{area}}(p, r) = \max(0, N_{\text{expected\_clues}} - N_{\text{found}}) \cdot \frac{|\text{UnscannedFreeCells}(p, r)|}{|\text{TotalUnscannedFreeCells}|} \cdot G_{\text{clue}}$$
-where $G_{\text{clue}} = 1.0\text{ bit}$.
+where $G_{\text{clue}} = 1.0\text{ bit}$. Each radius $r \in \{1, 2, 3\}$ is evaluated as a separate candidate action with resource costs $\text{Cost}_{\text{battery}} = 2 + 2r$ and $\text{Cost}_{\text{time}} = 1 + r$.
 
 ---
 
-### 2.5 Multi-Objective Utility Function
+### 2.5 Multi-Objective Utility Function & Plan Persistence
 
 Given candidate goals $g$ (e.g., scan at current position, scan area, or navigate to viewpoint $v$ and scan):
 $$U(g) = \frac{\text{Gain}(g) + \text{Progress}(g)}{1.0 + w_{\text{cost}} \cdot \text{Cost}_{\text{norm}}(g)}$$
@@ -125,6 +130,13 @@ where:
 - $\text{Gain}(g) = w_{\text{info}} \cdot \text{EIG}_{\text{signal}} + w_{\text{clue}} \cdot \text{EIG}_{\text{area}}$.
 - $\text{Progress}(g) = w_{\text{prog}} \cdot \max(0, D(p, \mu_B) - D(v, \mu_B))$ encourages forward traversal toward the belief centroid $\mu_B$.
 - $\text{Cost}_{\text{norm}}(g) = \frac{\text{BatteryCost}(g)}{\text{BatteryCapacity}} + \frac{\text{TimeTicks}(g)}{\text{TimeBudget}}$.
+
+#### Plan Persistence and 15% Re-planning Rule
+Once a multi-step navigation plan is established, the agent commits to its execution unless:
+1. The next scheduled action violates the safe-return invariant.
+2. The high-level strategy state machine triggers a transition (e.g., `EXPLORE` $\to$ `TRACK`).
+3. A fresh observation (signal reading or physical clue) arrives, updating posterior entropy.
+4. A newly evaluated candidate goal exceeds the utility of the active plan by more than $15\%$ ($U(g^*) > 1.15 \cdot U(\text{current})$).
 
 #### Strategy-Adaptive Weights
 
