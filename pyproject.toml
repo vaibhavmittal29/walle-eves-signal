@@ -5,8 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "walle-eve-signal"
 version = "0.1.0"
-description = "Autonomous search agent for WALL-E and EVE's Signal"
+description = "Autonomous Active Bayesian Search Agent for WALL-E and EVE's Signal"
 readme = "README.md"
+authors = [
+    { name = "Vaibhav Mittal", email = "vaibhavmittalwork@gmail.com" }
+]
+license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24.0",
@@ -15,6 +19,10 @@ dependencies = [
     "pillow>=9.5.0",
     "imageio>=2.30.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/vaibhavmittal29/walle-eves-signal"
+Repository = "https://github.com/vaibhavmittal29/walle-eves-signal.git"
 
 [project.scripts]
 walle = "walle.cli:main"

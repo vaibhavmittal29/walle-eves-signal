@@ -1,7 +1,7 @@
 # WALL-E and EVE's Signal: Autonomous Active Bayesian Search Agent
 
-> **Vinnovate IT — AI/ML Round 1 (Task 2)**  
-> **Builder:** First-Year Computer Science & Engineering Student  
+> **Author:** [vaibhavmittal29](https://github.com/vaibhavmittal29)  
+> **Repository:** [vaibhavmittal29/walle-eves-signal](https://github.com/vaibhavmittal29/walle-eves-signal)  
 > **Stack:** Python 3.10+, NumPy, PyYAML, Matplotlib, Pillow, pytest  
 > **Core Architecture:** Vectorized 3D Exact Bayesian Grid Filter + Monte-Carlo Expected Information Gain (EIG) Planner with Guaranteed Dynamic Safe-Return Reserves
 
@@ -44,8 +44,8 @@ The codebase is self-contained and uses standard scientific Python libraries:
 
 ```bash
 # Clone the repository
-git clone https://github.com/vaibhav/walle-eve-signal.git
-cd walle-eve-signal
+git clone https://github.com/vaibhavmittal29/walle-eves-signal.git
+cd walle-eves-signal
 
 # Create and activate a clean virtual environment
 python -m venv .venv
@@ -419,3 +419,11 @@ pytest -v tests/test_separation.py
 # Run the 100-seed zero-stranding safety property test
 pytest -v tests/test_agent_invariants.py::test_safety_property_100_seeds_never_stranded
 ```
+
+---
+
+## 11. Author & License
+
+- **Author:** Vaibhav Mittal ([@vaibhavmittal29](https://github.com/vaibhavmittal29) | [vaibhavmittalwork@gmail.com](mailto:vaibhavmittalwork@gmail.com))
+- **License:** [MIT License](LICENSE) &copy; 2026 Vaibhav Mittal
+

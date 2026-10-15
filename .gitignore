@@ -26,16 +26,29 @@ env/
 venv/
 ENV/
 
-# Testing
+# Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
 
-# IDE
+# IDE & OS
 .vscode/
 .idea/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# Project outputs that shouldn't be tracked globally or temp files
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Logs & temp files
+*.log
 *.tmp
+*.bak
