@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 
 from walle.geometry import distance
-from walle.observations import Observation, PublicMissionInfo
+from walle.observations import Observation, PublicMissionInfo, SensorPrior
 from walle.signal_model import (
     STATUSES,
     STATUS_TO_IDX,
@@ -84,10 +84,31 @@ class Belief:
 
     def predict(self, drift_sigma: float = 0.5) -> None:
         """Diffuse location marginal with a Gaussian blur respecting walls (random walk bonus)."""
-        from scipy.ndimage import gaussian_filter  # type: ignore
+        if drift_sigma <= 0.0:
+            return
+
+        radius = max(1, int(math.ceil(3.0 * drift_sigma)))
+        x_coords = np.arange(-radius, radius + 1, dtype=np.float64)
+        kernel = np.exp(-0.5 * (x_coords / drift_sigma) ** 2)
+        kernel /= np.sum(kernel)
+
+        h, w = self._height, self._width
+        r = len(kernel) // 2
 
         for k in range(3):
-            blurred = gaussian_filter(self._grid[:, :, k], sigma=drift_sigma, mode="constant")
+            layer = self._grid[:, :, k]
+            # Convolve along axis 1 (horizontal)
+            padded_w = np.pad(layer, ((0, 0), (r, r)), mode="constant", constant_values=0.0)
+            temp = np.zeros_like(layer)
+            for i in range(len(kernel)):
+                temp += kernel[i] * padded_w[:, i : i + w]
+
+            # Convolve along axis 0 (vertical)
+            padded_h = np.pad(temp, ((r, r), (0, 0)), mode="constant", constant_values=0.0)
+            blurred = np.zeros_like(layer)
+            for i in range(len(kernel)):
+                blurred += kernel[i] * padded_h[i : i + h, :]
+
             for wx, wy in self._walls:
                 blurred[wy, wx] = 0.0
             self._grid[:, :, k] = blurred

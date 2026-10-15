@@ -144,6 +144,18 @@ def generate_report(
     with open(json_path, "w", encoding="utf-8") as jf:
         json.dump(report_dict, jf, indent=2, default=_json_default)
 
+    # Read empirical calibration statistics if available
+    calib_md_path = Path("outputs/calibration.md")
+    calib_statement = "Nominal 90% Bayesian credible region."
+    if calib_md_path.exists():
+        try:
+            import re
+            m = re.search(r"Overall 90% Credible Region Empirical Coverage:\*\*\s*([\d\.]+)%", calib_md_path.read_text(encoding="utf-8"))
+            if m:
+                calib_statement = f"Empirically calibrated: 90% credible regions achieve {m.group(1)}% empirical coverage across 200 randomized missions."
+        except Exception:
+            pass
+
     # Markdown Document
     md_content = f"""# WALL-E Mission Report: {result.config_name}
 
@@ -163,14 +175,14 @@ def generate_report(
 - **90% Credible Region:**
   - Encompasses **{cred_count} cells**
   - Spatial Bounding Box: `[{bbox[0]}, {bbox[1]}]` to `[{bbox[2]}, {bbox[3]}]`
-- **Calibration Note:** In 90% of calibrated runs, EVE's true coordinate falls inside this region.
+- **Calibration Note:** {calib_statement}
 
 ---
 
 ## 3. Evidence Table
 Total pieces of evidence collected: **{len(evidence_records)}**.
 
-### Top 5 Most Influential Observations:
+### Top Most Influential Observations:
 | Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
 |---|---|---|---|---|---|---|
 """
@@ -180,6 +192,19 @@ Total pieces of evidence collected: **{len(evidence_records)}**.
             f"`{ev.get('raw_value', '-')}` | **{ev.get('info_gain_bits', 0.0):.3f}** | "
             f"`{ev.get('status', 'trusted')}` | {ev.get('effect', '-')} |\n"
         )
+
+    # Clue evidence rows
+    clue_evidence = [ev for ev in evidence_records if str(ev.get("type", "")).startswith("clue_")]
+    if clue_evidence:
+        md_content += "\n### Clue Evidence Discovered:\n"
+        md_content += "| Step | Clue Type | Raw Value | Info Gain (bits) | Status | Impact on Belief |\n"
+        md_content += "|---|---|---|---|---|---|\n"
+        for cev in clue_evidence:
+            md_content += (
+                f"| {cev.get('step', '-')} | `{cev.get('type', '-')}` | "
+                f"`{cev.get('raw_value', '-')}` | **{cev.get('info_gain_bits', 0.0):.3f}** | "
+                f"`{cev.get('status', 'trusted')}` | {cev.get('effect', '-')} |\n"
+            )
 
     discounted_ev = [ev for ev in evidence_records if ev.get("status") == "discounted"]
     if discounted_ev:

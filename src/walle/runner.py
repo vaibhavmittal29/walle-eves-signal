@@ -44,6 +44,8 @@ class RunResult:
     success: bool  # error <= 2.0 and status_correct
     credible_hit: bool  # true location inside 90% credible region
     final_entropy: float
+    location_confidence: float
+    status_confidence: float
     clues_found: int
     trace_records: List[Dict[str, Any]]
 
@@ -121,6 +123,11 @@ def run_mission(
             seed=a_seed,
             mc_samples=cfg.agent.mc_samples,
             max_candidates=cfg.agent.max_candidates,
+            thresholds=cfg.agent.thresholds,
+            safety=cfg.agent.safety,
+            assumed_spoof_rate=cfg.agent.assumed_spoof_rate,
+            expected_clues=cfg.mission.clues.count,
+            drift_sigma=0.5 if cfg.mission.eve.mobility == "random_walk" else 0.0,
         )
     elif selected_agent_type == "greedy_bearing":
         agent = GreedyBearingAgent(seed=a_seed)
@@ -131,6 +138,8 @@ def run_mission(
 
     # Reset agent with public info only
     agent.reset(info)
+    if isinstance(agent, BayesPlannerAgent):
+        agent.observe(obs)
 
     # Setup logger if out_dir requested
     logger = TraceLogger(out_dir) if out_dir is not None else None
@@ -153,6 +162,7 @@ def run_mission(
             "type": "initial_signal",
             "raw_value": f"str={obs.signal.strength}, brg={obs.signal.bearing_deg}°",
             "info_gain_bits": 0.5,
+            "status": "trusted",
             "effect": f"Initial prior pointing along bearing {obs.signal.bearing_deg}°",
         })
 
@@ -163,13 +173,13 @@ def run_mission(
         strat_name = agent._strategy.value if isinstance(agent, BayesPlannerAgent) else "SEARCH"
         strat_changes_before = len(agent.strategy_change_log) if isinstance(agent, BayesPlannerAgent) else 0
 
-        # Calculate reserve
+        # Calculate reserve with configured safety margins
         curr_res = return_reserve(
             pos=obs.position,
             chargers=info.chargers,
             move_battery_cost=info.costs.move.battery,
-            margin_fraction=0.10,
-            margin_flat=3,
+            margin_fraction=cfg.agent.safety.margin_fraction,
+            margin_flat=cfg.agent.safety.margin_flat,
             walls=info.walls,
             width=info.width,
             height=info.height,
@@ -182,13 +192,13 @@ def run_mission(
         }
 
         # Agent decision
-        action, decision = agent.act(obs)
+        if isinstance(agent, BayesPlannerAgent):
+            action, decision = agent.plan(obs)
+        else:
+            action, decision = agent.act(obs)
 
         # Detect if strategy changed during this act() call
         strat_change = None
-        if isinstance(agent, BayesPlannerAgent):
-            if len(agent.strategy_change_log) > strat_changes_before:
-                strat_change = agent.strategy_change_log[-1]
 
         if action.type == ActionType.DECLARE:
             declared_x = action.declare_x if action.declare_x is not None else obs.position[0]
@@ -197,6 +207,12 @@ def run_mission(
 
         # Step simulation
         obs = env.step(action)
+
+        # Ingest observation immediately into agent so belief and metrics reflect obs
+        if isinstance(agent, BayesPlannerAgent):
+            agent.observe(obs)
+            if len(agent.strategy_change_log) > strat_changes_before:
+                strat_change = agent.strategy_change_log[-1]
 
         # Metric updates
         if action.type == ActionType.RECHARGE and obs.action_succeeded:
@@ -317,6 +333,10 @@ def run_mission(
     battery_used = max(0, initial_battery - obs.battery + (recharges_count * cfg.resources.costs.recharge.battery_gain))
     ticks_used = cfg.resources.time_budget - obs.time_left
 
+    final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
+    loc_conf = round(final_belief.mass_within((declared_x, declared_y), radius=1.5), 3) if final_belief else 0.90
+    st_conf = round(final_belief.status_marginal().get(declared_st, 0.0), 3) if final_belief else 0.90
+
     result = RunResult(
         config_name=cfg.mission.name,
         seed=cfg.mission.seed,
@@ -337,6 +357,8 @@ def run_mission(
         success=success,
         credible_hit=credible_hit,
         final_entropy=final_entropy,
+        location_confidence=loc_conf,
+        status_confidence=st_conf,
         clues_found=clues_found,
         trace_records=trace_records,
     )

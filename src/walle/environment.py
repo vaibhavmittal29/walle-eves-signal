@@ -183,6 +183,19 @@ class Environment:
 
         # Check termination conditions
         if not self._done:
+            # Random walk target movement if mobility enabled
+            if self._config.mission.eve.mobility == "random_walk":
+                ex, ey = self._world._eve_location
+                nbrs = [(ex + dx, ey + dy) for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))]
+                valid_nbrs = [
+                    n for n in nbrs
+                    if 0 <= n[0] < self._world._width and 0 <= n[1] < self._world._height
+                    and n not in self._world._walls
+                ]
+                if valid_nbrs and self._rng.random() < 0.5:
+                    idx = int(self._rng.integers(0, len(valid_nbrs)))
+                    self._world._eve_location = valid_nbrs[idx]
+
             # Stranded: 0 battery away from any charger
             if self._battery <= 0 and self._position not in self._world._chargers:
                 self._done = True

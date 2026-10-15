@@ -9,6 +9,7 @@ import numpy as np
 
 from walle.actions import Action, ActionType, MOVE_DELTAS, cost_of
 from walle.belief import Belief, apply_observation
+from walle.config import AgentSafety, AgentThresholds
 from walle.geometry import bearing, distance, wrap_angle
 from walle.info_gain import eig_area, eig_signal, generate_candidates
 from walle.observations import Observation, PublicMissionInfo
@@ -49,10 +50,25 @@ class Decision:
 class BayesPlannerAgent:
     """Autonomous search agent executing active Bayesian perception under safety constraints."""
 
-    def __init__(self, seed: int = 123, mc_samples: int = 40, max_candidates: int = 25):
+    def __init__(
+        self,
+        seed: int = 123,
+        mc_samples: int = 40,
+        max_candidates: int = 25,
+        thresholds: Optional[AgentThresholds] = None,
+        safety: Optional[AgentSafety] = None,
+        assumed_spoof_rate: float = 0.0,
+        expected_clues: int = 5,
+        drift_sigma: float = 0.0,
+    ):
         self._master_seed = seed
         self._mc_samples = mc_samples
         self._max_candidates = max_candidates
+        self._thresholds = thresholds if thresholds is not None else AgentThresholds()
+        self._safety = safety if safety is not None else AgentSafety()
+        self._assumed_spoof_rate = assumed_spoof_rate
+        self._expected_clues = expected_clues
+        self._drift_sigma = drift_sigma
 
         self._info: Optional[PublicMissionInfo] = None
         self._belief: Optional[Belief] = None
@@ -86,6 +102,10 @@ class BayesPlannerAgent:
         self._info = info
         self._rng = np.random.default_rng(self._master_seed)
         self._belief = Belief(info)
+        if info.sensor_prior.assumed_spoof_rate > 0:
+            self._assumed_spoof_rate = max(
+                self._assumed_spoof_rate, info.sensor_prior.assumed_spoof_rate
+            )
 
         self._strategy = Strategy.EXPLORE
         self._previous_search_strategy = Strategy.EXPLORE
@@ -114,21 +134,27 @@ class BayesPlannerAgent:
         for wx, wy in info.walls:
             self._free_cells_mask[wy, wx] = False
 
-    def act(self, obs: Observation) -> Tuple[Action, Decision]:
-        """Process observation, update belief, evaluate strategies, and select optimal action."""
+    def observe(self, obs: Observation) -> None:
+        """Process observation, update belief, evaluate strategies, and track clues."""
         if self._info is None or self._belief is None:
-            raise RuntimeError("Agent must be reset with PublicMissionInfo before acting.")
+            raise RuntimeError("Agent must be reset with PublicMissionInfo before observing.")
 
         info = self._info
         belief = self._belief
         pos = obs.position
         self._pos_history.append(pos)
 
-        # 1. Contradiction / decoy check against current MAP hypothesis
+        # 1. Contradiction / decoy check against current MAP hypothesis (only if assumed_spoof_rate > 0)
         is_suspicious = False
         effective_prior = None
 
-        if obs.signal is not None and obs.step > 0 and obs.signal.bearing_deg is not None and not obs.signal.dropout:
+        if (
+            self._assumed_spoof_rate > 0
+            and obs.signal is not None
+            and obs.step > 0
+            and obs.signal.bearing_deg is not None
+            and not obs.signal.dropout
+        ):
             prev_map_x, prev_map_y = belief.map_estimate()
             prev_conf = belief.mass_within((prev_map_x, prev_map_y), radius=1.5)
             if prev_conf >= 0.25:
@@ -148,11 +174,15 @@ class BayesPlannerAgent:
         self.last_observation_suspicious = is_suspicious
 
         # Robust discounting via mixture model if assumed_spoof_rate > 0
-        if is_suspicious and info.sensor_prior.assumed_spoof_rate > 0:
+        if is_suspicious and self._assumed_spoof_rate > 0:
             effective_prior = replace(
                 info.sensor_prior,
-                assumed_spoof_rate=max(0.80, info.sensor_prior.assumed_spoof_rate),
+                assumed_spoof_rate=max(0.80, self._assumed_spoof_rate),
             )
+
+        # Target mobility drift step
+        if self._drift_sigma > 0.0:
+            belief.predict(drift_sigma=self._drift_sigma)
 
         # 2. Update belief from latest observation
         if obs.signal is not None and obs.step > 0:
@@ -160,12 +190,6 @@ class BayesPlannerAgent:
             if self._pending_confirmation and len(self._scan_history) >= 2:
                 if self._scan_history[-1] != self._scan_history[-2]:
                     self._pending_confirmation = False
-
-        # Ingest clues
-        if obs.clues:
-            for clue in obs.clues:
-                self._incorporated_clue_ids.add(clue.clue_id)
-            self._clues_found = len(self._incorporated_clue_ids)
 
         apply_observation(
             belief=belief,
@@ -175,28 +199,27 @@ class BayesPlannerAgent:
             incorporated_clue_ids=self._incorporated_clue_ids,
             effective_prior=effective_prior,
         )
+        self._clues_found = len(self._incorporated_clue_ids)
 
-        # 3. Evaluate metrics and confidence
+        # 3. Strategy State Machine Transitions
         map_x, map_y = belief.map_estimate()
         loc_conf = belief.mass_within((map_x, map_y), radius=1.5)
         status_marg = belief.status_marginal()
         best_status = max(status_marg.items(), key=lambda it: it[1])[0]
         status_conf = status_marg[best_status]
 
-        # Calculate current return reserve
         current_res = return_reserve(
             pos=pos,
             chargers=info.chargers,
             move_battery_cost=info.costs.move.battery,
-            margin_fraction=0.10,
-            margin_flat=3,
+            margin_fraction=self._safety.margin_fraction,
+            margin_flat=self._safety.margin_flat,
             walls=info.walls,
             width=info.width,
             height=info.height,
             charger_dist_maps=self._charger_dist_maps,
         )
 
-        # 4. Strategy State Machine Transitions
         cheapest_useful_cost = min(info.costs.move.battery, info.costs.scan_signal.battery)
         new_strat, prev_strat, trigger = evaluate_strategy_transition(
             current_strategy=self._strategy,
@@ -209,13 +232,17 @@ class BayesPlannerAgent:
             battery_capacity=info.battery_capacity,
             time_left=obs.time_left,
             on_charger=obs.on_charger,
-            thresholds=self._get_thresholds(),
+            thresholds=self._thresholds,
         )
 
-        # Delay DECLARE if a confirmation scan is pending
-        if new_strat == Strategy.DECLARE and self._pending_confirmation:
+        # Delay declaration if waiting for decoy confirmation scan (A8)
+        if (
+            self._pending_confirmation
+            and self._assumed_spoof_rate > 0
+            and new_strat == Strategy.DECLARE
+        ):
             new_strat = Strategy.VERIFY
-            trigger = "Holding DECLARE: pending confirmation scan of suspected decoy"
+            trigger = "[DECOY CONFIRMATION] Verification scan pending; delaying DECLARE"
 
         if new_strat != self._strategy:
             self.strategy_change_log.append({
@@ -229,6 +256,37 @@ class BayesPlannerAgent:
             self._strategy = new_strat
             self._previous_search_strategy = prev_strat
             self._current_plan.clear()
+
+        # A4 Rule (c): New clue or signal reading arrived triggers re-planning
+        if (obs.signal is not None and not obs.signal.dropout and obs.step > 0) or bool(obs.clues):
+            self._current_plan.clear()
+
+    def plan(self, obs: Observation) -> Tuple[Action, Decision]:
+        """Evaluate candidate actions and select optimal action using receding-horizon EIG."""
+        if self._info is None or self._belief is None:
+            raise RuntimeError("Agent must be reset with PublicMissionInfo before planning.")
+
+        info = self._info
+        belief = self._belief
+        pos = obs.position
+
+        map_x, map_y = belief.map_estimate()
+        loc_conf = belief.mass_within((map_x, map_y), radius=1.5)
+        status_marg = belief.status_marginal()
+        best_status = max(status_marg.items(), key=lambda it: it[1])[0]
+        status_conf = status_marg[best_status]
+
+        current_res = return_reserve(
+            pos=pos,
+            chargers=info.chargers,
+            move_battery_cost=info.costs.move.battery,
+            margin_fraction=self._safety.margin_fraction,
+            margin_flat=self._safety.margin_flat,
+            walls=info.walls,
+            width=info.width,
+            height=info.height,
+            charger_dist_maps=self._charger_dist_maps,
+        )
 
         # 4. Handle DECLARE strategy
         if self._strategy == Strategy.DECLARE:
@@ -287,10 +345,9 @@ class BayesPlannerAgent:
                 )
                 return recharge_action, decision
 
-        # 7. Check if we have an active, safe plan to execute
+        # Check safety of next action in existing plan (A4 Rule a)
         if self._current_plan:
             next_act = self._current_plan[0]
-            # Safety verification for next action
             b_cost = cost_of(next_act, info.costs)[0]
             next_pos = pos
             if next_act.type in MOVE_DELTAS:
@@ -303,29 +360,14 @@ class BayesPlannerAgent:
                 action_battery_cost=b_cost,
                 chargers=info.chargers,
                 move_battery_cost=info.costs.move.battery,
-                margin_fraction=0.10,
-                margin_flat=3,
+                margin_fraction=self._safety.margin_fraction,
+                margin_flat=self._safety.margin_flat,
                 walls=info.walls,
                 width=info.width,
                 height=info.height,
                 charger_dist_maps=self._charger_dist_maps,
             )
-
-            if safe:
-                chosen_action = self._current_plan.pop(0)
-                bat_after = obs.battery - b_cost
-                plan_desc = [a.type.value for a in [chosen_action] + self._current_plan]
-                decision = Decision(
-                    action=chosen_action,
-                    plan=plan_desc,
-                    top_candidates=[],
-                    reasoning=(
-                        f"Executing plan towards {self._current_plan_goal}; "
-                        f"reserve {current_res} satisfied ({obs.battery}-{b_cost}={bat_after})."
-                    ),
-                )
-                return chosen_action, decision
-            else:
+            if not safe:
                 self._current_plan.clear()
 
         # 8. Plan Next Viewpoint (Receding-Horizon Candidate Evaluation)
@@ -343,7 +385,7 @@ class BayesPlannerAgent:
         dist_mean_curr = distance(pos, mean_loc)
         scored_candidates: List[Tuple[float, CandidateScore, List[Action]]] = []
 
-        # Candidate A: SCAN_SIGNAL at current position (if not scanned here in last 2 steps)
+        # Candidate A: SCAN_SIGNAL at current position
         if len(self._scan_history) == 0 or self._scan_history[-1] != pos:
             sig_bat = info.costs.scan_signal.battery
             sig_safe = is_action_safe(
@@ -352,8 +394,8 @@ class BayesPlannerAgent:
                 action_battery_cost=sig_bat,
                 chargers=info.chargers,
                 move_battery_cost=info.costs.move.battery,
-                margin_fraction=0.10,
-                margin_flat=3,
+                margin_fraction=self._safety.margin_fraction,
+                margin_flat=self._safety.margin_flat,
                 walls=info.walls,
                 width=info.width,
                 height=info.height,
@@ -374,43 +416,46 @@ class BayesPlannerAgent:
                 (u_here if sig_safe else -999.0, score_here, [Action(type=ActionType.SCAN_SIGNAL)])
             )
 
-        # Candidate B: SCAN_AREA(2) at current position
-        if weights.w_clue > 0 and self._clues_found < 5:
-            area_bat = info.costs.scan_area.battery_cost(2)
-            area_safe = is_action_safe(
-                current_battery=obs.battery,
-                pos_after=pos,
-                action_battery_cost=area_bat,
-                chargers=info.chargers,
-                move_battery_cost=info.costs.move.battery,
-                margin_fraction=0.10,
-                margin_flat=3,
-                walls=info.walls,
-                width=info.width,
-                height=info.height,
-                charger_dist_maps=self._charger_dist_maps,
-            )
-            eig_clue = eig_area(
-                position=pos,
-                radius=2,
-                scanned_mask=self._scanned_area_mask,
-                free_cells_mask=self._free_cells_mask,
-                total_clues_expected=5,
-                clues_found=self._clues_found,
-            )
-            cost_norm_area = (area_bat / info.battery_capacity) + (info.costs.scan_area.time_cost(2) / info.time_budget)
-            u_area = (weights.w_clue * eig_clue) / (1.0 + weights.w_cost * cost_norm_area)
+        # Candidate B: SCAN_AREA(r) for r in (1, 2, 3) at current position (A3!)
+        if weights.w_clue > 0 and self._clues_found < self._expected_clues:
+            max_r = min(3, info.costs.scan_area.max_radius)
+            for r in range(1, max_r + 1):
+                area_bat = info.costs.scan_area.battery_cost(r)
+                area_time = info.costs.scan_area.time_cost(r)
+                area_safe = is_action_safe(
+                    current_battery=obs.battery,
+                    pos_after=pos,
+                    action_battery_cost=area_bat,
+                    chargers=info.chargers,
+                    move_battery_cost=info.costs.move.battery,
+                    margin_fraction=self._safety.margin_fraction,
+                    margin_flat=self._safety.margin_flat,
+                    walls=info.walls,
+                    width=info.width,
+                    height=info.height,
+                    charger_dist_maps=self._charger_dist_maps,
+                )
+                eig_clue = eig_area(
+                    position=pos,
+                    radius=r,
+                    scanned_mask=self._scanned_area_mask,
+                    free_cells_mask=self._free_cells_mask,
+                    total_clues_expected=self._expected_clues,
+                    clues_found=self._clues_found,
+                )
+                cost_norm_area = (area_bat / info.battery_capacity) + (area_time / info.time_budget)
+                u_area = (weights.w_clue * eig_clue) / (1.0 + weights.w_cost * cost_norm_area)
 
-            score_area = CandidateScore(
-                goal=f"SCAN_AREA(2)@{pos}",
-                eig_bits=round(eig_clue, 3),
-                cost=round(cost_norm_area, 3),
-                utility=round(u_area, 3),
-                safe=area_safe,
-            )
-            scored_candidates.append(
-                (u_area if area_safe else -999.0, score_area, [Action(type=ActionType.SCAN_AREA, radius=2)])
-            )
+                score_area = CandidateScore(
+                    goal=f"SCAN_AREA({r})@{pos}",
+                    eig_bits=round(eig_clue, 3),
+                    cost=round(cost_norm_area, 3),
+                    utility=round(u_area, 3),
+                    safe=area_safe,
+                )
+                scored_candidates.append(
+                    (u_area if area_safe else -999.0, score_area, [Action(type=ActionType.SCAN_AREA, radius=r)])
+                )
 
         # Candidate C: Move to viewpoint vp and scan there
         for vp in viewpoints:
@@ -432,73 +477,59 @@ class BayesPlannerAgent:
                 for i in range(travel_steps)
             ]
 
-            # Check if first step is safe
-            first_safe = is_action_safe(
+            first_step_safe = is_action_safe(
                 current_battery=obs.battery,
                 pos_after=path_to_vp[1],
                 action_battery_cost=info.costs.move.battery,
                 chargers=info.chargers,
                 move_battery_cost=info.costs.move.battery,
-                margin_fraction=0.10,
-                margin_flat=3,
+                margin_fraction=self._safety.margin_fraction,
+                margin_flat=self._safety.margin_flat,
                 walls=info.walls,
                 width=info.width,
                 height=info.height,
                 charger_dist_maps=self._charger_dist_maps,
             )
 
-            # Check if arrival at vp is safe
-            entire_safe = is_action_safe(
+            full_path_safe = is_action_safe(
                 current_battery=obs.battery,
                 pos_after=vp,
                 action_battery_cost=total_bat,
                 chargers=info.chargers,
                 move_battery_cost=info.costs.move.battery,
-                margin_fraction=0.10,
-                margin_flat=3,
+                margin_fraction=self._safety.margin_fraction,
+                margin_flat=self._safety.margin_flat,
                 walls=info.walls,
                 width=info.width,
                 height=info.height,
                 charger_dist_maps=self._charger_dist_maps,
             )
-            cand_safe = first_safe and entire_safe
 
-            eig_val = eig_signal(belief, vp, self._rng, info, mc_samples=self._mc_samples)
-            dist_mean_after = distance(vp, mean_loc)
-            prog_val = max(0.0, dist_mean_curr - dist_mean_after)
+            safe = first_step_safe and full_path_safe
+            eig_vp = eig_signal(belief, vp, self._rng, info, mc_samples=self._mc_samples)
+            cost_norm_vp = (total_bat / info.battery_capacity) + (total_time / info.time_budget)
+            dist_vp_mean = distance(vp, mean_loc)
+            approach_bonus = max(0.0, dist_mean_curr - dist_vp_mean) * weights.w_prog
 
-            cost_norm = (total_bat / info.battery_capacity) + (total_time / info.time_budget)
-            numerator = (weights.w_info * eig_val) + (weights.w_prog * prog_val)
-            denominator = 1.0 + (weights.w_cost * cost_norm)
-            u_vp = numerator / max(1e-4, denominator)
+            utility_numerator = (weights.w_info * eig_vp) + approach_bonus
+            utility_denominator = 1.0 + (weights.w_cost * cost_norm_vp)
+            u_vp = utility_numerator / utility_denominator
 
-            # If confirmation scan is pending, boost viewpoints providing orthogonal triangulation
-            if self._pending_confirmation:
-                b_curr = bearing(pos, (map_x, map_y))
-                b_vp = bearing(vp, (map_x, map_y))
-                ang_sep = abs(wrap_angle(b_vp - b_curr))
-                if 45.0 <= ang_sep <= 135.0:
-                    u_vp += 0.50
-
-            # Penalize recently scanned viewpoints
-            if vp in self._scan_history[-3:]:
+            if travel_steps > 0 and self._is_dithering(path_to_vp[1]):
                 u_vp *= 0.50
 
-            # Anti-dithering penalty
-            if self._is_dithering(path_to_vp[1]):
-                u_vp -= 0.20
-
-            cand_score = CandidateScore(
+            score_vp = CandidateScore(
                 goal=f"GO_TO@{vp}->SCAN",
-                eig_bits=round(eig_val, 3),
-                cost=round(cost_norm, 3),
+                eig_bits=round(eig_vp, 3),
+                cost=round(cost_norm_vp, 3),
                 utility=round(u_vp, 3),
-                safe=cand_safe,
+                safe=safe,
             )
-            plan_vp = move_actions + [Action(type=ActionType.SCAN_SIGNAL)]
-            scored_candidates.append((u_vp if cand_safe else -999.0, cand_score, plan_vp))
+            full_plan = move_actions + [Action(type=ActionType.SCAN_SIGNAL)]
+            scored_candidates.append(
+                (u_vp if safe else -999.0, score_vp, full_plan)
+            )
 
-        # Sort candidates descending by utility
         scored_candidates.sort(key=lambda it: it[0], reverse=True)
         top_candidates = [it[1] for it in scored_candidates[:5]]
 
@@ -529,9 +560,28 @@ class BayesPlannerAgent:
                 )
                 return recharge_action, decision
 
-        # Adopt optimal plan
         best_u, best_cand, best_plan = safe_candidates[0]
-        self._current_plan = best_plan
+
+        # Plan persistence vs re-planning (A4 Rule d)
+        # If current plan is active and safe, only switch if fresh candidate beats it by > 15%
+        if self._current_plan and best_u <= 1.15 * self._current_plan_utility:
+            chosen_action = self._current_plan.pop(0)
+            b_cost = cost_of(chosen_action, info.costs)[0]
+            bat_after = obs.battery - b_cost
+            plan_desc = [a.type.value for a in [chosen_action] + self._current_plan]
+            decision = Decision(
+                action=chosen_action,
+                plan=plan_desc,
+                top_candidates=top_candidates,
+                reasoning=(
+                    f"Executing plan towards {self._current_plan_goal}; "
+                    f"reserve {current_res} satisfied ({obs.battery}-{b_cost}={bat_after})."
+                ),
+            )
+            return chosen_action, decision
+
+        # Adopt optimal plan (fresh plan or replacement)
+        self._current_plan = list(best_plan)
         self._current_plan_goal = best_cand.goal
         self._current_plan_utility = best_u
 
@@ -539,7 +589,7 @@ class BayesPlannerAgent:
         b_cost = cost_of(chosen_action, info.costs)[0]
         bat_after = obs.battery - b_cost
 
-        if self._pending_confirmation:
+        if self._pending_confirmation and self._assumed_spoof_rate > 0:
             reasoning = (
                 f"[SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); "
                 f"confirming from viewpoint {best_cand.goal}; reserve {current_res} "
@@ -562,6 +612,11 @@ class BayesPlannerAgent:
 
         return chosen_action, decision
 
+    def act(self, obs: Observation) -> Tuple[Action, Decision]:
+        """Process observation, update belief, evaluate strategies, and select optimal action."""
+        self.observe(obs)
+        return self.plan(obs)
+
     def _is_dithering(self, next_pos: Tuple[int, int]) -> bool:
         """Detect 2-cell oscillation loops across the last 4 movements."""
         if len(self._pos_history) < 3:
@@ -569,8 +624,3 @@ class BayesPlannerAgent:
         if self._pos_history[-1] == self._pos_history[-3] and next_pos == self._pos_history[-2]:
             return True
         return False
-
-    def _get_thresholds(self):
-        """Helper to retrieve agent thresholds."""
-        from walle.config import AgentThresholds
-        return AgentThresholds(track=0.50, verify=0.75, declare_location=0.90, declare_status=0.70)
