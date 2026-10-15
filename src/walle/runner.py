@@ -54,6 +54,7 @@ def run_mission(
     out_dir: Optional[Union[str, Path]] = None,
     master_seed: Optional[int] = None,
     agent_seed: Optional[int] = None,
+    print_ascii: bool = False,
 ) -> RunResult:
     """Execute a complete simulated mission from start to final declaration.
 
@@ -271,6 +272,22 @@ def run_mission(
                 belief=belief_ref,
                 is_suspicious=is_susp,
             )
+
+        # Optional Live ASCII rendering
+        if print_ascii:
+            from walle.viz import render_ascii
+            b_ref = agent._belief if isinstance(agent, BayesPlannerAgent) else Belief(info)
+            clue_positions = [c.position for c in obs.clues] if obs.clues else []
+            frame = render_ascii(
+                position=obs.position,
+                belief=b_ref,
+                info=info,
+                show_truth=obs.done,
+                ground_truth=env.ground_truth() if obs.done else None,
+                discovered_clues=clue_positions,
+            )
+            print(f"\n[STEP {curr_step:03d} | TICK {curr_tick:03d} | {strat_name}] Action: {action.type.value} | Battery: {obs.battery} | Time: {obs.time_left}")
+            print(frame)
 
     if logger is not None:
         logger.close()

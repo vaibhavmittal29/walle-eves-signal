@@ -55,6 +55,7 @@ def main(args: list[str] | None = None) -> int:
             agent_type=parsed_args.agent,
             out_dir=parsed_args.out,
             master_seed=parsed_args.seed,
+            print_ascii=parsed_args.ascii,
         )
 
         print("\n" + "=" * 50)
