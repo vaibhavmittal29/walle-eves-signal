@@ -65,3 +65,36 @@ def test_agent_modules_do_not_import_ground_truth():
                     "_clues",
                     "_decoys",
                 ), f"{mod_path.name} accesses private world attribute {node.attr}"
+
+
+def test_runtime_agent_receives_only_public_types():
+    """Runtime check ensuring that everything passed into the agent is strictly PublicMissionInfo or Observation."""
+    from walle.agent import BayesPlannerAgent
+    from walle.environment import Environment
+    from walle.observations import Observation, PublicMissionInfo
+
+    cfg = load_config(Path("configs/mission_easy.yaml"))
+    env = Environment(cfg)
+    info, obs = env.reset()
+
+    # Verify reset argument
+    assert isinstance(info, PublicMissionInfo), f"Expected PublicMissionInfo, got {type(info)}"
+    assert not hasattr(info, "_eve_location")
+    assert not hasattr(info, "eve_location")
+    assert not hasattr(info, "ground_truth")
+
+    agent = BayesPlannerAgent(seed=42)
+    agent.reset(info)
+
+    # Step through simulation and inspect every input to the agent
+    for _ in range(10):
+        assert isinstance(obs, Observation), f"Expected Observation, got {type(obs)}"
+        assert not hasattr(obs, "_eve_location")
+        assert not hasattr(obs, "ground_truth")
+        assert not hasattr(obs, "_world")
+
+        action, _ = agent.act(obs)
+        if obs.done:
+            break
+        obs = env.step(action)
+

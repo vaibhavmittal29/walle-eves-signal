@@ -53,8 +53,9 @@ class Environment:
         self._done_reason = None
         self._revealed_clues.clear()
 
-        # Initial signal reading at step 0 if provided in config
-        init_sig = self._config.initial_signal
+        # Public mission info and initial signal reading at step 0
+        pub_info = self._world.public_info()
+        init_sig = pub_info.initial_signal
         initial_signal_reading: Optional[SignalReading] = None
         if init_sig.bearing_deg is not None or init_sig.strength is not None:
             initial_signal_reading = SignalReading(
@@ -77,7 +78,7 @@ class Environment:
             done_reason=None,
         )
 
-        return self._world.public_info(), initial_obs
+        return pub_info, initial_obs
 
     def step(self, action: Action) -> Observation:
         """Execute one action, update resources and environment state, and return observation."""

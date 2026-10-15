@@ -91,11 +91,17 @@ class TraceLogger:
         ]
 
         obs_dict = {
+            "step": observation.step,
             "pos": [observation.position[0], observation.position[1]],
             "battery": observation.battery,
+            "time_left": observation.time_left,
+            "action_succeeded": observation.action_succeeded,
+            "bumped": observation.bumped,
+            "on_charger": observation.on_charger,
             "signal": obs_sig,
             "clues": obs_clues,
-            "bumped": observation.bumped,
+            "done": observation.done,
+            "done_reason": observation.done_reason,
         }
 
         # 2. Build decision representation
@@ -110,8 +116,17 @@ class TraceLogger:
             for cs in decision.top_candidates
         ]
 
+        action_params = {
+            "type": decision.action.type.value,
+            "radius": decision.action.radius,
+            "declare_x": decision.action.declare_x,
+            "declare_y": decision.action.declare_y,
+            "declare_status": decision.action.declare_status,
+        }
+
         dec_dict = {
             "action": decision.action.type.value,
+            "action_params": action_params,
             "plan": decision.plan,
             "top_candidates": top_cands,
             "reasoning": decision.reasoning,

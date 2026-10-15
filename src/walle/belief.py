@@ -44,6 +44,17 @@ class Belief:
                     for idx in range(3):
                         self._grid[y, x, idx] = status_weights[idx]
 
+        # Apply initial signal coordinate hint Gaussian prior if provided
+        if info.initial_signal is not None and info.initial_signal.coordinates is not None:
+            cx, cy = info.initial_signal.coordinates
+            sigma = info.initial_signal.coordinates_sigma if info.initial_signal.coordinates_sigma > 0 else 4.0
+            for y in range(self._height):
+                for x in range(self._width):
+                    if (x, y) not in self._walls:
+                        d2 = float((x - cx) ** 2 + (y - cy) ** 2)
+                        w_coord = math.exp(-0.5 * d2 / (sigma ** 2))
+                        self._grid[y, x, :] *= w_coord
+
         # Normalize so total mass is exactly 1.0
         total = float(np.sum(self._grid))
         if total > 0:
@@ -52,6 +63,7 @@ class Belief:
         self._uniform_prior = self._grid.copy()
         self.contradiction_count: int = 0
         self.last_kl_divergence: float = 0.0
+        self.last_entropy_reduction: float = 0.0
 
     @property
     def grid(self) -> np.ndarray:
@@ -64,6 +76,7 @@ class Belief:
         Returns:
             Information gained in bits (Kullback-Leibler divergence D_KL(new || old)).
         """
+        prev_entropy = self.entropy()
         unnormalized = self._grid * likelihood
         total_mass = float(np.sum(unnormalized))
 
@@ -80,42 +93,54 @@ class Belief:
         self.last_kl_divergence = max(0.0, float(kl))
 
         self._grid = new_grid
+        new_entropy = self.entropy()
+        self.last_entropy_reduction = max(0.0, float(prev_entropy - new_entropy))
         return self.last_kl_divergence
 
     def predict(self, drift_sigma: float = 0.5) -> None:
-        """Diffuse location marginal with a Gaussian blur respecting walls (random walk bonus)."""
+        """Propagate belief according to target mobility dynamics.
+
+        Computes exact transition probabilities matching the simulator's random walk policy:
+        From cell (x, y), target stays with prob 0.5 and moves to a random free 4-neighbor with prob 0.5.
+        Walls and borders are strictly respected, and probability mass is conserved.
+        """
         if drift_sigma <= 0.0:
             return
 
-        radius = max(1, int(math.ceil(3.0 * drift_sigma)))
-        x_coords = np.arange(-radius, radius + 1, dtype=np.float64)
-        kernel = np.exp(-0.5 * (x_coords / drift_sigma) ** 2)
-        kernel /= np.sum(kernel)
-
         h, w = self._height, self._width
-        r = len(kernel) // 2
+        new_grid = np.zeros_like(self._grid)
 
-        for k in range(3):
-            layer = self._grid[:, :, k]
-            # Convolve along axis 1 (horizontal)
-            padded_w = np.pad(layer, ((0, 0), (r, r)), mode="constant", constant_values=0.0)
-            temp = np.zeros_like(layer)
-            for i in range(len(kernel)):
-                temp += kernel[i] * padded_w[:, i : i + w]
+        # Precompute transitions for each free cell
+        for y in range(h):
+            for x in range(w):
+                if (x, y) in self._walls:
+                    continue
 
-            # Convolve along axis 0 (vertical)
-            padded_h = np.pad(temp, ((r, r), (0, 0)), mode="constant", constant_values=0.0)
-            blurred = np.zeros_like(layer)
-            for i in range(len(kernel)):
-                blurred += kernel[i] * padded_h[i : i + h, :]
+                nbrs = [(x + dx, y + dy) for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))]
+                valid_nbrs = [
+                    n for n in nbrs
+                    if 0 <= n[0] < w and 0 <= n[1] < h and n not in self._walls
+                ]
 
-            for wx, wy in self._walls:
-                blurred[wy, wx] = 0.0
-            self._grid[:, :, k] = blurred
+                num_valid = len(valid_nbrs)
+                if num_valid > 0:
+                    p_stay = 0.5
+                    p_move = 0.5 / num_valid
+                    new_grid[y, x, :] += p_stay * self._grid[y, x, :]
+                    for nx, ny in valid_nbrs:
+                        new_grid[ny, nx, :] += p_move * self._grid[y, x, :]
+                else:
+                    new_grid[y, x, :] += self._grid[y, x, :]
 
-        total = float(np.sum(self._grid))
+        # Guarantee wall zeros and mass conservation
+        for wx, wy in self._walls:
+            new_grid[wy, wx, :] = 0.0
+
+        total = float(np.sum(new_grid))
         if total > 0:
-            self._grid /= total
+            new_grid /= total
+
+        self._grid = new_grid
 
     def location_marginal(self) -> np.ndarray:
         """Compute 2D spatial marginal distribution M[y, x] = sum_k B[y, x, k]."""
@@ -199,6 +224,8 @@ class Belief:
             "map": [map_x, map_y],
             "map_prob": round(float(loc_marg[map_y, map_x]), 4),
             "entropy_bits": round(self.entropy(), 3),
+            "kl_divergence_bits": round(self.last_kl_divergence, 3),
+            "entropy_reduction_bits": round(self.last_entropy_reduction, 3),
             "info_gain_bits": round(self.last_kl_divergence, 3),
             "location_confidence": round(self.mass_within((map_x, map_y), radius=1.5), 3),
             "status_probs": {st: round(p, 4) for st, p in self.status_marginal().items()},

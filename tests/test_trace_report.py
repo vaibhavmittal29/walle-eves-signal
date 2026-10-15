@@ -54,7 +54,7 @@ def test_trace_jsonl_schema(tmp_path: Path):
 
 
 def test_trace_replay_reproduces_identical_observations(tmp_path: Path):
-    """Replaying logged actions on a fresh environment with same seed reproduces identical observations."""
+    """Replaying logged actions on a fresh environment with same seed reproduces identical observations across ALL fields."""
     out_dir = tmp_path / "replay_run"
     res = run_mission("configs/mission_easy.yaml", out_dir=out_dir)
 
@@ -67,22 +67,70 @@ def test_trace_replay_reproduces_identical_observations(tmp_path: Path):
     _, obs = env.reset()
 
     for idx, rec in enumerate(lines):
-        act_name = rec["decision"]["action"]
-        act_type = ActionType(act_name)
-        if act_type == ActionType.DECLARE:
-            dec_pos = rec["decision"]["plan"]  # e.g. DECLARE
-            map_x, map_y = rec["belief_after"]["map"]
-            action = Action(type=act_type, declare_x=map_x, declare_y=map_y, declare_status="active")
-        elif act_type == ActionType.SCAN_AREA:
-            action = Action(type=act_type, radius=2)
-        else:
-            action = Action(type=act_type)
+        dec = rec["decision"]
+        params = dec.get("action_params", {})
+        act_type = ActionType(params.get("type", dec["action"]))
+
+        action = Action(
+            type=act_type,
+            radius=params.get("radius", 1),
+            declare_x=params.get("declare_x"),
+            declare_y=params.get("declare_y"),
+            declare_status=params.get("declare_status"),
+        )
 
         obs = env.step(action)
-        expected_pos = tuple(rec["observation"]["pos"])
-        expected_battery = rec["observation"]["battery"]
-        assert obs.position == expected_pos
-        assert obs.battery == expected_battery
+        o_exp = rec["observation"]
+
+        assert obs.position == tuple(o_exp["pos"])
+        assert obs.battery == o_exp["battery"]
+        assert obs.bumped == o_exp["bumped"]
+        if "time_left" in o_exp:
+            assert obs.time_left == o_exp["time_left"]
+            assert obs.action_succeeded == o_exp["action_succeeded"]
+            assert obs.on_charger == o_exp["on_charger"]
+            assert obs.done == o_exp["done"]
+            assert obs.done_reason == o_exp["done_reason"]
+
+        if o_exp["signal"] is not None:
+            assert obs.signal is not None
+            assert obs.signal.dropout == o_exp["signal"]["dropout"]
+            if obs.signal.bearing_deg is not None and o_exp["signal"]["bearing_deg"] is not None:
+                assert abs(obs.signal.bearing_deg - o_exp["signal"]["bearing_deg"]) < 1e-2
+            if obs.signal.strength is not None and o_exp["signal"]["strength"] is not None:
+                assert abs(obs.signal.strength - o_exp["signal"]["strength"]) < 1e-2
+        else:
+            assert obs.signal is None
+
+        # Verify clues match
+        assert len(obs.clues) == len(o_exp["clues"])
+        for c_act, c_exp in zip(obs.clues, o_exp["clues"]):
+            assert c_act.clue_id == c_exp["clue_id"]
+            assert c_act.type == c_exp["type"]
+
+
+def test_corrupted_trace_fails_replay_verification(tmp_path: Path):
+    """Corrupted trace field must trigger an assertion failure during replay."""
+    out_dir = tmp_path / "replay_neg_run"
+    res = run_mission("configs/mission_easy.yaml", out_dir=out_dir)
+
+    jsonl_path = out_dir / "trace.jsonl"
+    lines = [json.loads(line) for line in open(jsonl_path, "r", encoding="utf-8") if line.strip()]
+
+    # Deliberately corrupt position in step 1
+    lines[0]["observation"]["pos"] = [99, 99]
+
+    cfg = load_config("configs/mission_easy.yaml")
+    env = Environment(cfg)
+    _, obs = env.reset()
+
+    dec = lines[0]["decision"]
+    params = dec.get("action_params", {})
+    action = Action(type=ActionType(params.get("type", dec["action"])))
+    obs = env.step(action)
+
+    with pytest.raises(AssertionError):
+        assert obs.position == tuple(lines[0]["observation"]["pos"])
 
 
 def test_report_contains_all_eight_sections(tmp_path: Path):

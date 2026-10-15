@@ -281,13 +281,33 @@ class World:
         Strict separation guarantee: NO private fields (EVE position/status,
         clues, decoys) are leaked here.
         """
-        init_sig = InitialSignal(
-            bearing_deg=self._config.initial_signal.bearing_deg,
-            coordinates=self._config.initial_signal.coordinates,
-            coordinates_sigma=self._config.initial_signal.coordinates_sigma,
-            strength=self._config.initial_signal.strength,
-            timestamp=self._config.initial_signal.timestamp,
-        )
+        init_cfg = self._config.initial_signal
+        if init_cfg.bearing_deg is not None or init_cfg.coordinates is not None or init_cfg.strength is not None:
+            init_sig = InitialSignal(
+                bearing_deg=init_cfg.bearing_deg,
+                coordinates=init_cfg.coordinates,
+                coordinates_sigma=init_cfg.coordinates_sigma,
+                strength=init_cfg.strength,
+                timestamp=init_cfg.timestamp,
+            )
+        else:
+            # Simulator environment setup API: synthesize realistic initial signal internally
+            from walle.signal_model import sample_signal
+            sig = sample_signal(
+                agent_pos=self._start,
+                eve_pos=self._eve_location,
+                eve_status=self._eve_status,
+                sensor=self._config.sensor,
+                rng=np.random.default_rng(self._config.mission.seed + 555),
+                decoys=self._decoys,
+            )
+            init_sig = InitialSignal(
+                bearing_deg=sig.bearing_deg,
+                coordinates=None,
+                coordinates_sigma=4.0,
+                strength=sig.strength,
+                timestamp=0,
+            )
 
         sensor_prior = self._config.sensor.to_sensor_prior(
             assumed_spoof_rate=self._config.agent.assumed_spoof_rate

@@ -17,7 +17,6 @@ from walle.geometry import distance
 from walle.observations import Observation, PublicMissionInfo
 from walle.planner import return_reserve
 from walle.report import generate_report
-from walle.signal_model import sample_signal
 from walle.trace import TraceLogger
 from walle.world import GroundTruth
 
@@ -82,29 +81,6 @@ def run_mission(
         cfg = AppConfig(
             mission=m,
             initial_signal=cfg.initial_signal,
-            resources=cfg.resources,
-            sensor=cfg.sensor,
-            agent=cfg.agent,
-        )
-        # Sample realistic initial signal at start cell for this specific seed
-        env_temp = Environment(cfg)
-        gt_temp = env_temp.ground_truth()
-        init_sig_sampled = sample_signal(
-            agent_pos=cfg.mission.start,
-            eve_pos=gt_temp.eve_location,
-            eve_status=gt_temp.eve_status,
-            sensor=cfg.sensor,
-            rng=np.random.default_rng(master_seed + 555),
-        )
-        from walle.config import InitialSignalConfig
-        cfg = AppConfig(
-            mission=m,
-            initial_signal=InitialSignalConfig(
-                bearing_deg=init_sig_sampled.bearing_deg,
-                coordinates=None,
-                strength=init_sig_sampled.strength,
-                timestamp=0,
-            ),
             resources=cfg.resources,
             sensor=cfg.sensor,
             agent=cfg.agent,

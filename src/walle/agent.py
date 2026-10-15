@@ -170,6 +170,8 @@ class BayesPlannerAgent:
                         is_suspicious = True
                         self._pending_confirmation = True
                         self._suspicious_readings_count += 1
+                        self._suspicious_reading = obs.signal
+                        self._suspicious_hypothesis = (prev_map_x, prev_map_y)
 
         self.last_observation_suspicious = is_suspicious
 
@@ -187,9 +189,20 @@ class BayesPlannerAgent:
         # 2. Update belief from latest observation
         if obs.signal is not None and obs.step > 0:
             self._scan_history.append(pos)
-            if self._pending_confirmation and len(self._scan_history) >= 2:
-                if self._scan_history[-1] != self._scan_history[-2]:
-                    self._pending_confirmation = False
+            # Evaluate confirmation evidence under documented rule
+            if self._pending_confirmation and self._suspicious_hypothesis is not None:
+                if len(self._scan_history) >= 2 and self._scan_history[-1] != self._scan_history[-2]:
+                    if obs.signal.bearing_deg is not None and not obs.signal.dropout:
+                        d_hyp = distance(pos, self._suspicious_hypothesis)
+                        exp_b = bearing(pos, self._suspicious_hypothesis)
+                        ang_err = abs(wrap_angle(obs.signal.bearing_deg - exp_b))
+                        sigma_b = (
+                            info.sensor_prior.bearing_sigma_base_deg
+                            + info.sensor_prior.bearing_sigma_per_cell_deg * d_hyp
+                        ) * info.sensor_prior.noise_scale
+                        # Confirmed if new reading is consistent with hypothesis OR belief has shifted decisively
+                        if ang_err <= max(3.0 * sigma_b, 45.0) or belief.mass_within(belief.map_estimate(), radius=1.5) >= 0.70:
+                            self._pending_confirmation = False
 
         apply_observation(
             belief=belief,

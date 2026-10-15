@@ -79,3 +79,43 @@ def test_strategy_transitions_progression():
     assert res.outcome == "declared"
     assert res.location_error <= 2.0
     assert res.status_correct is True
+
+
+def test_safe_return_recomputed_independently_every_step():
+    """Independent verification: For every nonterminal step in a mission, remaining battery >= return reserve."""
+    from walle.planner import return_reserve
+    from walle.world import World
+
+    cfg = load_config(Path("configs/mission_medium.yaml"))
+    world = World(cfg)
+    info = world.public_info()
+
+    res = run_mission(config_path=cfg, agent_type="bayes_planner", master_seed=7)
+    chargers_set = set(info.chargers)
+
+    for rec in res.trace_records:
+        action_name = rec["action"]
+        if action_name == ActionType.DECLARE.value:
+            continue
+
+        pos_after = tuple(rec["position"])
+        bat_after = rec["battery"]
+
+        # If standing directly on a charger, battery is safe by definition
+        if pos_after in chargers_set:
+            continue
+
+        independent_res = return_reserve(
+            pos=pos_after,
+            chargers=info.chargers,
+            move_battery_cost=info.costs.move.battery,
+            margin_fraction=cfg.agent.safety.margin_fraction,
+            margin_flat=cfg.agent.safety.margin_flat,
+            walls=info.walls,
+            width=info.width,
+            height=info.height,
+        )
+
+        assert bat_after >= independent_res, (
+            f"Step {rec['step']}: Battery after action ({bat_after}) violated independent return reserve ({independent_res}) at {pos_after}!"
+        )

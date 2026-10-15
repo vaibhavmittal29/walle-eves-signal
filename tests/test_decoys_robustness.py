@@ -123,3 +123,114 @@ def test_hard_mission_trace_and_report_contain_discounted_status(tmp_path: Path)
 
     rep_json = eval(json_path.read_text(encoding="utf-8").replace("true", "True").replace("false", "False").replace("null", "None"))
     assert "discounted_evidence_count" in rep_json
+
+
+def test_true_signal_not_flagged_as_suspicious():
+    """Consistent observation aligning with MAP hypothesis must not be flagged suspicious."""
+    cfg = load_config("configs/mission_hard_decoys.yaml")
+    world = World(cfg)
+    info = world.public_info()
+
+    agent = BayesPlannerAgent(seed=456)
+    agent.reset(info)
+
+    agent._belief._grid.fill(0.0)
+    agent._belief._grid[10, 10, 0] = 1.0  # target at (10, 10)
+
+    # Agent standing at (5, 10). Expected bearing to (10, 10) is East (90 deg).
+    # Reading of 92 degrees is well within 3-sigma.
+    obs = Observation(
+        step=2,
+        position=(5, 10),
+        battery=85,
+        time_left=220,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=92.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs)
+    assert agent.last_observation_suspicious is False
+    assert agent._pending_confirmation is False
+
+
+def test_confirmation_success_clears_pending_flag():
+    """Evaluating a consistent follow-up reading from an orthogonal position clears pending confirmation."""
+    cfg = load_config("configs/mission_hard_decoys.yaml")
+    world = World(cfg)
+    info = world.public_info()
+
+    agent = BayesPlannerAgent(seed=456)
+    agent.reset(info)
+
+    agent._belief._grid.fill(0.0)
+    agent._belief._grid[10, 10, 0] = 1.0
+
+    # Step 1: Contradictory reading at (5, 10) pointing West (270°) instead of East (90°)
+    obs1 = Observation(
+        step=1,
+        position=(5, 10),
+        battery=85,
+        time_left=220,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=270.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs1)
+    assert agent._pending_confirmation is True
+
+    # Step 2: Follow-up observation from (10, 5) pointing South (180°) directly to (10, 10)
+    obs2 = Observation(
+        step=2,
+        position=(10, 5),
+        battery=83,
+        time_left=218,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=180.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs2)
+    assert agent._pending_confirmation is False
+
+
+def test_premature_declaration_blocked_while_pending_confirmation():
+    """Agent cannot transition to DECLARE while decoy confirmation scan is pending."""
+    cfg = load_config("configs/mission_hard_decoys.yaml")
+    world = World(cfg)
+    info = world.public_info()
+
+    agent = BayesPlannerAgent(seed=456)
+    agent.reset(info)
+
+    agent._belief._grid.fill(0.0)
+    agent._belief._grid[10, 10, 0] = 1.0  # 100% confidence on (10, 10)
+    agent._pending_confirmation = True
+
+    # Even with 100% location and status confidence, DECLARE must be blocked
+    obs = Observation(
+        step=4,
+        position=(10, 10),
+        battery=80,
+        time_left=200,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=None,
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    action, decision = agent.act(obs)
+    assert action.type != ActionType.DECLARE
+
