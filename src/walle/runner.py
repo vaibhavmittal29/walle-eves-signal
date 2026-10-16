@@ -448,6 +448,17 @@ def run_mission(
         with open(out_path / "predictions.json", "w", encoding="utf-8") as pf:
             json.dump(pred_dict, pf, indent=2)
 
+        # Write config.yaml
+        cfg_out = out_path / "config.yaml"
+        if not cfg_out.exists():
+            try:
+                import yaml
+                from dataclasses import asdict
+                with open(cfg_out, "w", encoding="utf-8") as cf:
+                    yaml.safe_dump(asdict(cfg), cf, default_flow_style=False)
+            except Exception:
+                pass
+
         # Write run.log
         txt_path = out_path / "trace.txt"
         log_path = out_path / "run.log"

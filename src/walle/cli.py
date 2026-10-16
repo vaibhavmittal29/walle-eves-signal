@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     bench_parser.add_argument("--out", type=str, default="outputs/benchmark", help="Benchmark output directory")
     bench_parser.add_argument("--seed", type=int, default=42, help="Benchmark master seed")
 
+    # verify command
+    verify_parser = subparsers.add_parser("verify", help="Independently verify execution trace and invariants")
+    verify_parser.add_argument("run_pos", nargs="?", default=None, help="Directory containing run artifacts (positional)")
+    verify_parser.add_argument("--run", type=str, default=None, help="Directory containing run artifacts")
+
     return parser
 
 
@@ -98,6 +103,13 @@ def main(args: list[str] | None = None) -> int:
             out_dir=parsed_args.out,
         )
         return 0
+
+    if parsed_args.command == "verify":
+        from walle.verify import verify_main
+        target_run = parsed_args.run or parsed_args.run_pos
+        if not target_run:
+            parser.error("walle verify requires a run directory (e.g. 'walle verify outputs/mission_medium_seed7')")
+        return verify_main(target_run)
 
 
 if __name__ == "__main__":

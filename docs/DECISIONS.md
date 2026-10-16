@@ -151,3 +151,12 @@ This document records all architectural choices, assumptions, and key decisions 
   - When an agent does not model a Bayesian posterior belief distribution (e.g. `RandomAgent`, `GreedyBearingAgent`), fields `location_confidence`, `status_confidence`, `credible_hit`, and `final_entropy` are set strictly to `None` in `RunResult` and `null` in `report.json`.
   - In `report.md`, these entries render honestly as `"N/A (baseline does not model posterior)"` and `"N/A (baseline does not compute credible regions)"`.
   - In `benchmark.py`, baseline rows render `"N/A"` in CSV and summary tables for credible region hit rate and final entropy, and credible hit rates are computed only over valid non-null runs, eliminating fabricated 90% or 0% baselines.
+
+## Remediation Phase 9: Production Trace Replay Verifier
+- **Standalone Verification Engine (`walle.verify`)**: Implemented an independent, post-hoc verification module that loads `trace.jsonl`, `report.json`, and `config.yaml` to replay mission steps without re-running agent decision logic.
+- **Physical & Transition Invariants**: Verifies 4-connected spatial adjacency for all move transitions, boundaries compliance, obstacle collision checking (`bumped=True` required on wall/boundary moves), and zero displacement on non-movement actions (`SCAN_SIGNAL`, `SCAN_AREA`, `RECHARGE`, `DECLARE`).
+- **Resource Accounting Integrity**: Independently computes per-action energy and tick costs against `CostTable`, verifying exact step-by-step subtraction from battery and time budgets.
+- **Safe-Return & Recharge Constraints**: Recomputes `return_reserve(pos)` at every step, confirming stated reserve in trace, verifying that `RECHARGE` only occurs on valid charger cells, and asserting `battery >= return_reserve` across field positions.
+- **Declaration Grounding**: Ensures final step `DECLARE` coordinates and operational status strictly match `report.json["final_answer"]`.
+- **CLI Subcommand**: Added `walle verify <trace_dir>` to `cli.py`, returning exit code 0 on verified clean traces and non-zero exit codes with explicit failure diagnostics upon detecting corruption or tampering.
+- **Self-Contained Run Artifacts**: Configured `runner.py` to serialize `config.yaml` into mission output folders alongside trace logs.
