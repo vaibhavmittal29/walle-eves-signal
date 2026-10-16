@@ -70,16 +70,16 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Confirmation Scans & Decoy Discounting**: Suspected decoys are heavily discounted via mixture attenuation, and the agent schedules an immediate confirmation scan from an orthogonal viewpoint ($45^\circ - 135^\circ$ angular separation) before trusting the hypothesis. Final declaration is deferred while confirmation is pending.
 - **Evidence Labeling**: Traces log `"suspicious": true`, and mission reports categorize readings as `discounted` in the Evidence Table with explanations.
 - **50-Seed Ablation Proof**: Over 50 randomized seeds on `mission_hard_decoys` ($\text{noise\_scale}=1.5$, 2 decoys, $15\%$ spoof rate, $10\%$ false clues):
-  - Naive Agent ($\epsilon=0.0$): 68.0% Success Rate, 2.47 cells mean error.
-  - Robust Agent ($\epsilon=0.15$): **90.0% Success Rate** (+22.0% gain), **1.02 cells mean error** (median 0.00 cells), and 0.0% stranded rate.
+  - Naive Agent ($\epsilon=0.0$): 60.0% Success Rate, 2.42 cells mean error.
+  - Robust Agent ($\epsilon=0.15$): **90.0% Success Rate** (+30.0% gain), **1.12 cells mean error** (median 0.00 cells), and 0.0% stranded rate.
 
 ## Phase 10: Bonus B - Benchmark & Baseline Comparison
 - **Automated Randomized Mission Generator**: Generates $N$ reproducible benchmark missions sampling grid sizes $12 \times 12$ to $24 \times 24$, obstacle densities $0.04$ to $0.16$, battery capacities $60$ to $120$, and sensor noise scales $0.8$ to $1.5$.
 - **Fair Head-to-Head Architecture Evaluation**: Tested `RandomAgent`, `GreedyBearingAgent`, and `BayesPlannerAgent` against identical worlds, ground truths, and initial signals.
 - **Artifact Pipeline**: Exports raw metrics to `outputs/benchmark/benchmark_results.csv`, synthesizes `outputs/benchmark/benchmark_summary.md`, and renders a publication-quality 4-panel visual chart `outputs/benchmark/benchmark_chart.png`.
 - **100-Mission Benchmark Findings**:
-  - `BayesPlannerAgent` achieved a **99.0% success rate** with **0.30 cells mean error** (median 0.00 cells) and **100.0% status accuracy**, compared to 6.0% for greedy bearing pursuit and 3.0% for random exploration.
-  - Resource conservation: `BayesPlannerAgent` consumed an average of only **37.6 battery units** across **34.3 ticks** (0.3 recharge dockings), while non-Bayesian baselines wandered in loops exceeding 860+ energy units and 40+ recharge cycles.
+  - `BayesPlannerAgent` achieved a **98.0% success rate** with **0.30 cells mean error** (median 0.00 cells) and **98.0% status accuracy**, compared to 6.0% for greedy bearing pursuit and 3.0% for random exploration.
+  - Resource conservation: `BayesPlannerAgent` consumed an average of **63.0 battery units** across **56.7 ticks** (1.6 recharge dockings), while non-Bayesian baselines wandered in loops with 42-46 recharge cycles.
   - 0% stranded invariant preserved unconditionally across all 3 architectures.
 
 ## Phase 11: Correctness Audit & Algorithmic Hardening

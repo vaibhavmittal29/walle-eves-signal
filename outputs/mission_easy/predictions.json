@@ -1,0 +1,23 @@
+{
+  "mission": "mission_easy",
+  "seed": 42,
+  "agent": "bayes_planner",
+  "declared_location": [
+    6,
+    11
+  ],
+  "declared_status": "active",
+  "location_confidence": 1.0,
+  "status_confidence": 1.0,
+  "credible_hit": true,
+  "location_error": 0.0,
+  "status_correct": true,
+  "success": true,
+  "outcome": "declared",
+  "steps": 20,
+  "ticks_used": 20,
+  "battery_used": 21,
+  "net_battery_change": 21,
+  "recharge_energy_delivered": 0,
+  "recharges_count": 0
+}

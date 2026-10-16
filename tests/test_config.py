@@ -94,3 +94,43 @@ def test_inverted_agent_thresholds():
     cfg = AppConfig(agent=AgentConfig(thresholds=AgentThresholds(track=0.8, verify=0.6, declare_location=0.9)))
     with pytest.raises(ConfigError, match="Agent thresholds must satisfy"):
         validate_config(cfg)
+
+
+def test_non_finite_values_raise_config_error():
+    """Non-finite float values (NaN, Inf) must raise ConfigError."""
+    import math
+    from walle.config import AgentConfig
+    cfg = AppConfig(agent=AgentConfig(assumed_spoof_rate=float("nan")))
+    with pytest.raises(ConfigError, match="Non-finite value detected"):
+        validate_config(cfg)
+
+    cfg_inf = AppConfig(agent=AgentConfig(assumed_spoof_rate=float("inf")))
+    with pytest.raises(ConfigError, match="Non-finite value detected"):
+        validate_config(cfg_inf)
+
+
+def test_cross_field_eve_distance_exceeds_bounds():
+    """eve.min_distance_from_start exceeding grid span must raise ConfigError."""
+    from walle.config import EveConfig
+    cfg = AppConfig(mission=MissionSectionConfig(eve=EveConfig(min_distance_from_start=100)))
+    with pytest.raises(ConfigError, match="exceeds max grid span"):
+        validate_config(cfg)
+
+
+def test_invalid_bearing_range():
+    """Initial signal bearing outside [0, 360] must raise ConfigError."""
+    cfg = AppConfig(initial_signal=InitialSignalConfig(bearing_deg=450.0))
+    with pytest.raises(ConfigError, match="Initial signal bearing_deg must be in"):
+        validate_config(cfg)
+
+
+def test_invalid_safety_margins():
+    """Safety margin fraction >= 1.0 or flat margin < 0 must raise ConfigError."""
+    from walle.config import AgentConfig, AgentSafety
+    cfg = AppConfig(agent=AgentConfig(safety=AgentSafety(margin_fraction=1.2)))
+    with pytest.raises(ConfigError, match="Agent safety margin_fraction"):
+        validate_config(cfg)
+
+    cfg_neg = AppConfig(agent=AgentConfig(safety=AgentSafety(margin_flat=-1)))
+    with pytest.raises(ConfigError, match="Agent safety margin_flat cannot be negative"):
+        validate_config(cfg_neg)

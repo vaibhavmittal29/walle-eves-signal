@@ -102,6 +102,50 @@ def run_calibration(n_missions: int = 200, base_seed: int = 500, out_path: str =
     out_file.write_text("\n".join(lines), encoding="utf-8")
     print(f"Saved calibration report to {out_file}")
 
+    # Render calibration.png
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        bin_mids = []
+        bin_accuracies = []
+        counts = []
+        for b in bins:
+            c = bin_counts[b]
+            if c > 0:
+                bin_mids.append((b[0] + min(1.0, b[1])) / 2.0)
+                bin_accuracies.append(bin_hits_patch[b] / c)
+                counts.append(c)
+
+        fig, ax = plt.subplots(figsize=(7, 6), dpi=150)
+        fig.patch.set_facecolor("#0f172a")
+        ax.set_facecolor("#1e293b")
+        ax.tick_params(colors="#e2e8f0", labelsize=10)
+        ax.grid(color="#334155", linestyle="--", alpha=0.5)
+        for spine in ax.spines.values():
+            spine.set_color("#475569")
+
+        ax.plot([0.5, 1.0], [0.5, 1.0], "--", color="#94a3b8", linewidth=1.8, label="Ideal Calibration (y = x)")
+        if bin_mids:
+            ax.plot(bin_mids, bin_accuracies, "o-", color="#10b981", linewidth=2.5, markersize=8, label="Empirical Patch Coverage")
+            for x, y, n in zip(bin_mids, bin_accuracies, counts):
+                ax.annotate(f"N={n}", (x, y), textcoords="offset points", xytext=(0, 10), ha="center", color="#f8fafc", fontsize=9, fontweight="bold")
+
+        ax.set_xlim(0.5, 1.02)
+        ax.set_ylim(0.5, 1.02)
+        ax.set_xlabel("Mean Declared Confidence", color="#cbd5e1", fontsize=11)
+        ax.set_ylabel("Empirical Accuracy (Error <= 1.5 cells)", color="#cbd5e1", fontsize=11)
+        ax.set_title(f"BayesPlanner Confidence Calibration (N={n_missions} Seeds)", color="#f8fafc", fontsize=12, fontweight="bold", pad=12)
+        ax.legend(facecolor="#1e293b", edgecolor="#475569", labelcolor="#f8fafc", loc="upper left", fontsize=9)
+        plt.tight_layout()
+        png_path = out_file.with_suffix(".png")
+        fig.savefig(png_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor="none")
+        plt.close(fig)
+        print(f"Saved calibration plot to {png_path}")
+    except Exception as e:
+        print(f"Warning: could not generate calibration plot: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run calibration evaluation.")

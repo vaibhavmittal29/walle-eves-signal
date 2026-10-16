@@ -1,0 +1,23 @@
+{
+  "mission": "mission_hard_decoys",
+  "seed": 99,
+  "agent": "bayes_planner",
+  "declared_location": [
+    19,
+    6
+  ],
+  "declared_status": "low_power",
+  "location_confidence": 1.0,
+  "status_confidence": 1.0,
+  "credible_hit": false,
+  "location_error": 1.0,
+  "status_correct": true,
+  "success": true,
+  "outcome": "declared",
+  "steps": 122,
+  "ticks_used": 127,
+  "battery_used": 136,
+  "net_battery_change": 40,
+  "recharge_energy_delivered": 96,
+  "recharges_count": 5
+}

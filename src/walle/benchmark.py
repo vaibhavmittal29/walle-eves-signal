@@ -327,6 +327,56 @@ def run_benchmark(
     fig.savefig(chart_path, dpi=200, facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close(fig)
 
+    # 5. Write predictions.csv
+    pred_csv_path = out_path / "predictions.csv"
+    with open(pred_csv_path, "w", newline="", encoding="utf-8") as pf:
+        fieldnames = [
+            "mission_id", "seed", "agent_type", "outcome", "success",
+            "declared_x", "declared_y", "declared_status",
+            "true_x", "true_y", "true_status",
+            "location_error", "status_correct", "credible_hit",
+            "location_confidence", "status_confidence", "final_entropy",
+            "steps", "ticks_used", "battery_used",
+        ]
+        writer = csv.DictWriter(pf, fieldnames=fieldnames)
+        writer.writeheader()
+        for at in agent_types:
+            for idx, r in enumerate(results[at]):
+                writer.writerow({
+                    "mission_id": idx,
+                    "seed": r.seed,
+                    "agent_type": at,
+                    "outcome": r.outcome,
+                    "success": r.success,
+                    "declared_x": r.declared_location[0],
+                    "declared_y": r.declared_location[1],
+                    "declared_status": r.declared_status,
+                    "true_x": r.true_location[0],
+                    "true_y": r.true_location[1],
+                    "true_status": r.true_status,
+                    "location_error": r.location_error,
+                    "status_correct": r.status_correct,
+                    "credible_hit": r.credible_hit,
+                    "location_confidence": r.location_confidence,
+                    "status_confidence": r.status_confidence,
+                    "final_entropy": r.final_entropy,
+                    "steps": r.steps,
+                    "ticks_used": r.ticks_used,
+                    "battery_used": r.battery_used,
+                })
+
+    # 6. Generate Error CDF Plot
+    render_error_cdf(results, out_path / "error_cdf.png")
+
+    # 7. Generate Status Confusion Matrix (BayesPlanner)
+    render_status_confusion_matrix(results["bayes_planner"], out_path / "status_confusion_matrix.png")
+
+    # 8. Generate Reliability / Calibration Diagram (BayesPlanner)
+    render_calibration_plot(results["bayes_planner"], out_path / "calibration.png")
+
+    # 9. Generate Entropy Convergence Curve (BayesPlanner)
+    render_entropy_convergence(results["bayes_planner"], out_path / "entropy_convergence.png")
+
     # Print summary table to stdout
     print(f"\n================================================================================")
     print(f"BENCHMARK AGGREGATED SUMMARY (N={n_missions})")
@@ -339,3 +389,161 @@ def run_benchmark(
     print(f"================================================================================\n")
 
     return md_path, csv_path, chart_path
+
+
+def render_error_cdf(results: Dict[str, List[RunResult]], out_path: Path) -> None:
+    """Plot Empirical Cumulative Distribution Function (CDF) of location errors."""
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=150)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#1e293b")
+    ax.tick_params(colors="#e2e8f0", labelsize=10)
+    ax.grid(color="#334155", linestyle="--", alpha=0.5)
+    for spine in ax.spines.values():
+        spine.set_color("#475569")
+
+    colors = {"random": "#64748b", "greedy_bearing": "#f97316", "bayes_planner": "#10b981"}
+    labels = {"random": "Random", "greedy_bearing": "Greedy Bearing", "bayes_planner": "Bayes Planner"}
+
+    for at, r_list in results.items():
+        errors = np.sort([r.location_error for r in r_list])
+        cdf = np.arange(1, len(errors) + 1) / len(errors)
+        ax.plot(errors, cdf, label=labels.get(at, at), color=colors.get(at, "#3b82f6"), linewidth=2.4)
+
+    ax.axvline(2.0, color="#ef4444", linestyle=":", linewidth=1.8, label="Success Bound (2.0 cells)")
+    ax.set_xlim(0, max(12, max(np.percentile([r.location_error for r in results["random"]], 90), 10)))
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("Location Error (cells)", color="#cbd5e1", fontsize=11)
+    ax.set_ylabel("Empirical CDF: P(Error <= e)", color="#cbd5e1", fontsize=11)
+    ax.set_title("Empirical Cumulative Distribution Function of Location Error", color="#f8fafc", fontsize=12, fontweight="bold", pad=10)
+    ax.legend(facecolor="#1e293b", edgecolor="#475569", labelcolor="#f8fafc", loc="lower right", fontsize=9)
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def render_status_confusion_matrix(planner_results: List[RunResult], out_path: Path) -> None:
+    """Plot confusion matrix for target status classification."""
+    statuses = ["active", "low_power", "damaged"]
+    st_to_idx = {s: i for i, s in enumerate(statuses)}
+    matrix = np.zeros((len(statuses), len(statuses)), dtype=int)
+
+    for r in planner_results:
+        ti = st_to_idx.get(r.true_status, 0)
+        pi = st_to_idx.get(r.declared_status, 0)
+        matrix[ti, pi] += 1
+
+    fig, ax = plt.subplots(figsize=(7, 6), dpi=150)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#1e293b")
+    ax.tick_params(colors="#e2e8f0", labelsize=10)
+
+    im = ax.imshow(matrix, cmap="Blues", interpolation="nearest")
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.ax.tick_params(colors="#e2e8f0")
+
+    ax.set_xticks(range(len(statuses)))
+    ax.set_yticks(range(len(statuses)))
+    ax.set_xticklabels([s.replace("_", " ").title() for s in statuses], color="#e2e8f0", fontsize=10)
+    ax.set_yticklabels([s.replace("_", " ").title() for s in statuses], color="#e2e8f0", fontsize=10)
+    ax.set_xlabel("Predicted Status", color="#cbd5e1", fontsize=11, labelpad=8)
+    ax.set_ylabel("True Status", color="#cbd5e1", fontsize=11, labelpad=8)
+    ax.set_title("Bayes Planner: Target Status Confusion Matrix", color="#f8fafc", fontsize=12, fontweight="bold", pad=12)
+
+    total_samples = len(planner_results)
+    for i in range(len(statuses)):
+        for j in range(len(statuses)):
+            cnt = matrix[i, j]
+            pct = (cnt / total_samples) * 100.0 if total_samples > 0 else 0.0
+            color = "white" if cnt > matrix.max() / 2 else "#0f172a"
+            ax.text(j, i, f"{cnt}\n({pct:.1f}%)", ha="center", va="center", color=color, fontweight="bold", fontsize=10)
+
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def render_calibration_plot(planner_results: List[RunResult], out_path: Path) -> None:
+    """Plot reliability diagram (confidence calibration) for location declarations."""
+    bins = [(0.5, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 0.95), (0.95, 1.001)]
+    bin_mids = []
+    bin_accuracies = []
+    bin_counts = []
+
+    for low, high in bins:
+        matching = [r for r in planner_results if low <= r.location_confidence < high]
+        if matching:
+            mid = (low + min(1.0, high)) / 2.0
+            acc = sum(1 for r in matching if r.location_error <= 1.5) / len(matching)
+            bin_mids.append(mid)
+            bin_accuracies.append(acc)
+            bin_counts.append(len(matching))
+
+    fig, ax = plt.subplots(figsize=(7, 6), dpi=150)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#1e293b")
+    ax.tick_params(colors="#e2e8f0", labelsize=10)
+    ax.grid(color="#334155", linestyle="--", alpha=0.5)
+    for spine in ax.spines.values():
+        spine.set_color("#475569")
+
+    # Ideal calibration line
+    ax.plot([0.5, 1.0], [0.5, 1.0], "--", color="#94a3b8", linewidth=1.8, label="Perfect Calibration (y = x)")
+
+    if bin_mids:
+        ax.plot(bin_mids, bin_accuracies, "o-", color="#10b981", linewidth=2.5, markersize=8, label="Empirical Coverage")
+        for x, y, n in zip(bin_mids, bin_accuracies, bin_counts):
+            ax.annotate(f"N={n}", (x, y), textcoords="offset points", xytext=(0, 10), ha="center", color="#f8fafc", fontsize=9, fontweight="bold")
+
+    ax.set_xlim(0.5, 1.02)
+    ax.set_ylim(0.5, 1.02)
+    ax.set_xlabel("Mean Declared Confidence", color="#cbd5e1", fontsize=11)
+    ax.set_ylabel("Empirical Accuracy (Error <= 1.5 cells)", color="#cbd5e1", fontsize=11)
+    ax.set_title("Reliability Diagram: Location Confidence Calibration", color="#f8fafc", fontsize=12, fontweight="bold", pad=12)
+    ax.legend(facecolor="#1e293b", edgecolor="#475569", labelcolor="#f8fafc", loc="upper left", fontsize=9)
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+
+
+def render_entropy_convergence(planner_results: List[RunResult], out_path: Path) -> None:
+    """Plot spatial entropy decay over time across missions."""
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=150)
+    fig.patch.set_facecolor("#0f172a")
+    ax.set_facecolor("#1e293b")
+    ax.tick_params(colors="#e2e8f0", labelsize=10)
+    ax.grid(color="#334155", linestyle="--", alpha=0.5)
+    for spine in ax.spines.values():
+        spine.set_color("#475569")
+
+    # Collect entropy at each step across runs that logged trace records
+    step_entropies: Dict[int, List[float]] = {}
+    for r in planner_results:
+        for trec in r.trace_records:
+            # Check if belief_after or entropy is recorded
+            st = trec.get("step", 0)
+            ent = trec.get("entropy", None)
+            if ent is None and "belief_after" in trec:
+                ent = trec["belief_after"].get("entropy_bits")
+            if ent is not None:
+                step_entropies.setdefault(st, []).append(float(ent))
+
+    if step_entropies:
+        steps_sorted = sorted(step_entropies.keys())[:35]
+        means = [np.mean(step_entropies[s]) for s in steps_sorted]
+        stds = [np.std(step_entropies[s]) for s in steps_sorted]
+        ax.plot(steps_sorted, means, color="#3b82f6", linewidth=2.5, label="Mean Spatial Entropy (bits)")
+        ax.fill_between(steps_sorted, np.maximum(0, np.array(means) - np.array(stds)), np.array(means) + np.array(stds), color="#3b82f6", alpha=0.2, label=r"$\pm 1\sigma$ Dispersion")
+    else:
+        # Fallback using final entropy
+        final_ents = [r.final_entropy for r in planner_results]
+        ax.hist(final_ents, bins=15, color="#3b82f6", edgecolor="white", alpha=0.8, label="Final Entropy Distribution")
+        ax.set_xlabel("Final Entropy (bits)", color="#cbd5e1", fontsize=11)
+        ax.set_ylabel("Count", color="#cbd5e1", fontsize=11)
+
+    ax.set_xlabel("Mission Step", color="#cbd5e1", fontsize=11)
+    ax.set_ylabel("Belief Entropy (bits)", color="#cbd5e1", fontsize=11)
+    ax.set_title("Bayesian Information Convergence: Entropy Reduction", color="#f8fafc", fontsize=12, fontweight="bold", pad=12)
+    ax.legend(facecolor="#1e293b", edgecolor="#475569", labelcolor="#f8fafc", loc="upper right", fontsize=9)
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)

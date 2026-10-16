@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import yaml
@@ -184,9 +185,39 @@ class AppConfig:
 
 def validate_config(cfg: AppConfig) -> None:
     """Validate full mission configuration, raising ConfigError on violation."""
+    # 0. Non-finite value assertions
+    for name, val in [
+        ("obstacles.density", cfg.mission.obstacles.density),
+        ("sensor.noise_scale", cfg.sensor.noise_scale),
+        ("sensor.strength_sigma", cfg.sensor.strength_sigma),
+        ("sensor.d0", cfg.sensor.d0),
+        ("sensor.bearing_sigma_base_deg", cfg.sensor.bearing_sigma_base_deg),
+        ("sensor.bearing_sigma_per_cell_deg", cfg.sensor.bearing_sigma_per_cell_deg),
+        ("agent.assumed_spoof_rate", cfg.agent.assumed_spoof_rate),
+        ("agent.safety.margin_fraction", cfg.agent.safety.margin_fraction),
+        ("agent.thresholds.track", cfg.agent.thresholds.track),
+        ("agent.thresholds.verify", cfg.agent.thresholds.verify),
+        ("agent.thresholds.declare_location", cfg.agent.thresholds.declare_location),
+        ("agent.thresholds.declare_status", cfg.agent.thresholds.declare_status),
+    ]:
+        if math.isnan(val) or math.isinf(val):
+            raise ConfigError(f"Non-finite value detected for {name}: {val}")
+
+    if cfg.initial_signal.bearing_deg is not None:
+        if math.isnan(cfg.initial_signal.bearing_deg) or math.isinf(cfg.initial_signal.bearing_deg):
+            raise ConfigError("Non-finite value for initial_signal.bearing_deg")
+    if cfg.initial_signal.strength is not None:
+        if math.isnan(cfg.initial_signal.strength) or math.isinf(cfg.initial_signal.strength):
+            raise ConfigError("Non-finite value for initial_signal.strength")
+
     w, h = cfg.mission.grid.width, cfg.mission.grid.height
     if w < 3 or h < 3:
         raise ConfigError(f"Grid dimensions must be at least 3x3, got {w}x{h}.")
+
+    if cfg.mission.eve.min_distance_from_start > (w + h):
+        raise ConfigError(
+            f"eve.min_distance_from_start ({cfg.mission.eve.min_distance_from_start}) exceeds max grid span ({w+h})."
+        )
 
     sx, sy = cfg.mission.start
     if not (0 <= sx < w and 0 <= sy < h):
@@ -234,6 +265,8 @@ def validate_config(cfg: AppConfig) -> None:
         raise ConfigError(
             "Initial signal must provide at least one of 'bearing_deg', 'coordinates', or 'strength'."
         )
+    if sig.bearing_deg is not None and not (0.0 <= sig.bearing_deg <= 360.0):
+        raise ConfigError(f"Initial signal bearing_deg must be in [0.0, 360.0], got {sig.bearing_deg}.")
     if sig.coordinates is not None:
         cx, cy = sig.coordinates
         if not (0 <= cx < w and 0 <= cy < h):
@@ -284,6 +317,12 @@ def validate_config(cfg: AppConfig) -> None:
         raise ConfigError(f"Agent mc_samples must be at least 5, got {ag.mc_samples}.")
     if ag.max_candidates < 1:
         raise ConfigError(f"Agent max_candidates must be at least 1, got {ag.max_candidates}.")
+    if not (0.0 <= ag.assumed_spoof_rate <= 1.0):
+        raise ConfigError(f"Agent assumed_spoof_rate must be in [0.0, 1.0], got {ag.assumed_spoof_rate}.")
+    if not (0.0 <= ag.safety.margin_fraction < 1.0):
+        raise ConfigError(f"Agent safety margin_fraction must be in [0.0, 1.0), got {ag.safety.margin_fraction}.")
+    if ag.safety.margin_flat < 0:
+        raise ConfigError(f"Agent safety margin_flat cannot be negative, got {ag.safety.margin_flat}.")
     if not (0 < ag.thresholds.track <= ag.thresholds.verify <= ag.thresholds.declare_location <= 1.0):
         raise ConfigError(
             f"Agent thresholds must satisfy 0 < track ({ag.thresholds.track}) "

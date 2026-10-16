@@ -25,13 +25,23 @@ def _json_default(o: Any) -> Any:
 class TraceLogger:
     """Manages structured JSONL, human-readable text traces, and belief tensor snapshots."""
 
-    def __init__(self, out_dir: Union[str, Path]):
+    def __init__(
+        self,
+        out_dir: Union[str, Path],
+        walls: Optional[Sequence[Tuple[int, int]]] = None,
+        chargers: Optional[Sequence[Tuple[int, int]]] = None,
+        grid_size: Optional[Tuple[int, int]] = None,
+    ):
         self.out_dir = Path(out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
         self.jsonl_path = self.out_dir / "trace.jsonl"
         self.txt_path = self.out_dir / "trace.txt"
         self.npz_path = self.out_dir / "belief_frames.npz"
+
+        self._walls = list(walls) if walls else []
+        self._chargers = list(chargers) if chargers else []
+        self._grid_size = tuple(grid_size) if grid_size else None
 
         # Clear existing logs
         if self.jsonl_path.exists():
@@ -202,4 +212,14 @@ class TraceLogger:
         # Save compressed belief frames
         if self._belief_frames:
             self._belief_frames["steps"] = np.array(self._frame_steps, dtype=np.int32)
+            if self._grid_size is not None:
+                self._belief_frames["grid_size"] = np.array(self._grid_size, dtype=np.int32)
+            if self._walls:
+                self._belief_frames["walls"] = np.array(self._walls, dtype=np.int32)
+            else:
+                self._belief_frames["walls"] = np.zeros((0, 2), dtype=np.int32)
+            if self._chargers:
+                self._belief_frames["chargers"] = np.array(self._chargers, dtype=np.int32)
+            else:
+                self._belief_frames["chargers"] = np.zeros((0, 2), dtype=np.int32)
             np.savez_compressed(self.npz_path, **self._belief_frames)

@@ -80,10 +80,14 @@ def main(args: list[str] | None = None) -> int:
         target_run = parsed_args.run or parsed_args.run_pos
         if not target_run:
             parser.error("walle viz requires a run directory (e.g. 'walle viz outputs/mission_medium_seed7' or '--run outputs/mission_medium_seed7')")
-        print(f"\n[WALL-E Viz] Generating summary and animation from {target_run}...")
+        print(f"\n[WALL-E Viz] Generating full visualization suite from {target_run}...")
         summary_p, gif_p = generate_visuals_from_run(target_run)
-        print(f"Saved summary frame: {summary_p}")
-        print(f"Saved animated GIF:  {gif_p}\n")
+        print(f"Saved summary frame:       {summary_p}")
+        print(f"Saved animated GIF:        {gif_p}")
+        print(f"Saved 2D path map:         {Path(target_run) / 'path_map.png'}")
+        print(f"Saved 3D space-time path:  {Path(target_run) / 'path_3d.png'}")
+        print(f"Saved belief evolution:    {Path(target_run) / 'belief_evolution.png'}")
+        print(f"Saved metrics dashboard:   {Path(target_run) / 'metrics_dashboard.png'}\n")
         return 0
 
     if parsed_args.command == "benchmark":

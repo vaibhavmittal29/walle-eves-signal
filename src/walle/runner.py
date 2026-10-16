@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+import json
 import numpy as np
 
 from walle.actions import Action, ActionType, cost_of
@@ -47,6 +48,9 @@ class RunResult:
     status_confidence: float
     clues_found: int
     trace_records: List[Dict[str, Any]]
+    net_battery_change: int = 0
+    battery_consumed_by_actions: int = 0
+    recharge_energy_delivered: int = 0
 
 
 def run_mission(
@@ -118,7 +122,16 @@ def run_mission(
         agent.observe(obs)
 
     # Setup logger if out_dir requested
-    logger = TraceLogger(out_dir) if out_dir is not None else None
+    logger = (
+        TraceLogger(
+            out_dir=out_dir,
+            walls=info.walls,
+            chargers=info.chargers,
+            grid_size=(info.width, info.height),
+        )
+        if out_dir is not None
+        else None
+    )
 
     # Tracking variables
     trace_records: List[Dict[str, Any]] = []
@@ -127,6 +140,7 @@ def run_mission(
     prev_pos = obs.position
     distance_travelled = 0.0
     recharges_count = 0
+    recharge_energy_delivered = 0
     min_battery_margin = 999999
     declared_x, declared_y = obs.position
     declared_st = "active"
@@ -193,6 +207,8 @@ def run_mission(
         # Metric updates
         if action.type == ActionType.RECHARGE and obs.action_succeeded:
             recharges_count += 1
+            energy_gained = max(0, obs.battery - state_before["battery"])
+            recharge_energy_delivered += energy_gained
 
         dist_step = distance(prev_pos, obs.position)
         distance_travelled += dist_step
@@ -306,7 +322,9 @@ def run_mission(
         final_entropy = round(agent._belief.entropy(), 3)
         clues_found = agent._clues_found
 
-    battery_used = max(0, initial_battery - obs.battery + (recharges_count * cfg.resources.costs.recharge.battery_gain))
+    net_battery_change = max(0, initial_battery - obs.battery)
+    battery_consumed_by_actions = net_battery_change + recharge_energy_delivered
+    battery_used = battery_consumed_by_actions
     ticks_used = cfg.resources.time_budget - obs.time_left
 
     final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
@@ -337,18 +355,53 @@ def run_mission(
         status_confidence=st_conf,
         clues_found=clues_found,
         trace_records=trace_records,
+        net_battery_change=net_battery_change,
+        battery_consumed_by_actions=battery_consumed_by_actions,
+        recharge_energy_delivered=recharge_energy_delivered,
     )
 
-    # Generate markdown and JSON report if out_dir specified
+    # Generate markdown, JSON report, predictions.json, and run.log if out_dir specified
     if out_dir is not None:
+        out_path = Path(out_dir)
         strat_history = agent.strategy_change_log if isinstance(agent, BayesPlannerAgent) else []
         final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
         generate_report(
             result=result,
             evidence_records=evidence_records,
             strategy_history=strat_history,
-            out_dir=out_dir,
+            out_dir=out_path,
             belief=final_belief,
+            info=info,
         )
+
+        # Write predictions.json
+        pred_dict = {
+            "mission": result.config_name,
+            "seed": result.seed,
+            "agent": result.agent_type,
+            "declared_location": list(result.declared_location),
+            "declared_status": result.declared_status,
+            "location_confidence": result.location_confidence,
+            "status_confidence": result.status_confidence,
+            "credible_hit": result.credible_hit,
+            "location_error": result.location_error,
+            "status_correct": result.status_correct,
+            "success": result.success,
+            "outcome": result.outcome,
+            "steps": result.steps,
+            "ticks_used": result.ticks_used,
+            "battery_used": result.battery_used,
+            "net_battery_change": result.net_battery_change,
+            "recharge_energy_delivered": result.recharge_energy_delivered,
+            "recharges_count": result.recharges_count,
+        }
+        with open(out_path / "predictions.json", "w", encoding="utf-8") as pf:
+            json.dump(pred_dict, pf, indent=2)
+
+        # Write run.log
+        txt_path = out_path / "trace.txt"
+        log_path = out_path / "run.log"
+        if txt_path.exists():
+            log_path.write_text(txt_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     return result

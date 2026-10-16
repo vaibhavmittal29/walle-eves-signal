@@ -418,7 +418,7 @@
        OBS:    POS=[17, 9] BAT=084 BUMP=False SIG=[STR=0.325 BRG=59.6° [SUSPECTED DECOY]] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1126 ENTROPY=5.96b CONF=0.35 STATUS={'active': 0.001, 'low_power': 0.2729, 'damaged': 0.7261}
 [step 105 | tick 109 | EXPLORE] POS=[17, 9] BAT=084 RES=06 -> ACTION=MOVE_E
-       REASON: Entropy 5.96 bits; best goal GO_TO@(18, 9)->SCAN gives 1.36 bits (cost 1 bat); reserve 6 satisfied (84-1=83).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(18, 9)->SCAN; reserve 6 satisfied (84-1=83).
        OBS:    POS=[18, 9] BAT=083 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1126 ENTROPY=5.96b CONF=0.35 STATUS={'active': 0.001, 'low_power': 0.2729, 'damaged': 0.7261}
 [step 106 | tick 110 | EXPLORE] POS=[18, 9] BAT=083 RES=07 -> ACTION=SCAN_SIGNAL
@@ -426,7 +426,7 @@
        OBS:    POS=[18, 9] BAT=081 BUMP=False SIG=[DROPOUT] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1281 ENTROPY=5.83b CONF=0.39 STATUS={'active': 0.0002, 'low_power': 0.1701, 'damaged': 0.8297}
 [step 107 | tick 111 | EXPLORE] POS=[18, 9] BAT=081 RES=07 -> ACTION=MOVE_S
-       REASON: Entropy 5.83 bits; best goal GO_TO@(18, 10)->SCAN gives 1.36 bits (cost 1 bat); reserve 7 satisfied (81-1=80).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(18, 10)->SCAN; reserve 7 satisfied (81-1=80).
        OBS:    POS=[18, 10] BAT=080 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1281 ENTROPY=5.83b CONF=0.39 STATUS={'active': 0.0002, 'low_power': 0.1701, 'damaged': 0.8297}
 [step 108 | tick 112 | EXPLORE] POS=[18, 10] BAT=080 RES=08 -> ACTION=SCAN_SIGNAL
@@ -434,7 +434,7 @@
        OBS:    POS=[18, 10] BAT=078 BUMP=False SIG=[DROPOUT] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1386 ENTROPY=5.68b CONF=0.41 STATUS={'active': 0.0, 'low_power': 0.1006, 'damaged': 0.8994}
 [step 109 | tick 113 | EXPLORE] POS=[18, 10] BAT=078 RES=08 -> ACTION=MOVE_N
-       REASON: Entropy 5.68 bits; best goal GO_TO@(18, 9)->SCAN gives 1.06 bits (cost 1 bat); reserve 8 satisfied (78-1=77).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(18, 9)->SCAN; reserve 8 satisfied (78-1=77).
        OBS:    POS=[18, 9] BAT=077 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(18,9) P=0.1386 ENTROPY=5.68b CONF=0.41 STATUS={'active': 0.0, 'low_power': 0.1006, 'damaged': 0.8994}
 [EVENT | tick 114] Strategy changed from EXPLORE to TRACK: location confidence 0.66 >= 0.50, switching to TRACK
@@ -443,7 +443,7 @@
        OBS:    POS=[18, 9] BAT=075 BUMP=False SIG=[STR=0.404 BRG=65.1°] CLUES=[None]
        BELIEF: MAP=(19,9) P=0.3966 ENTROPY=3.18b CONF=0.66 STATUS={'active': 0.0001, 'low_power': 0.2669, 'damaged': 0.733}
 [step 111 | tick 115 | TRACK  ] POS=[18, 9] BAT=075 RES=07 -> ACTION=MOVE_N
-       REASON: Entropy 3.18 bits; best goal GO_TO@(19, 8)->SCAN gives 0.93 bits (cost 1 bat); reserve 7 satisfied (75-1=74).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(19, 8)->SCAN; reserve 7 satisfied (75-1=74).
        OBS:    POS=[18, 8] BAT=074 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(19,9) P=0.3966 ENTROPY=3.18b CONF=0.66 STATUS={'active': 0.0001, 'low_power': 0.2669, 'damaged': 0.733}
 [step 112 | tick 116 | TRACK  ] POS=[18, 8] BAT=074 RES=08 -> ACTION=MOVE_E
@@ -455,11 +455,11 @@
        OBS:    POS=[19, 8] BAT=071 BUMP=False SIG=[STR=0.050 BRG=240.5° [SUSPECTED DECOY]] CLUES=[None]
        BELIEF: MAP=(19,9) P=0.3823 ENTROPY=3.49b CONF=0.64 STATUS={'active': 0.0001, 'low_power': 0.2589, 'damaged': 0.7409}
 [step 114 | tick 118 | TRACK  ] POS=[19, 8] BAT=071 RES=09 -> ACTION=MOVE_S
-       REASON: Entropy 3.49 bits; best goal GO_TO@(19, 9)->SCAN gives 1.19 bits (cost 1 bat); reserve 9 satisfied (71-1=70).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(19, 9)->SCAN; reserve 9 satisfied (71-1=70).
        OBS:    POS=[19, 9] BAT=070 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(19,9) P=0.3823 ENTROPY=3.49b CONF=0.64 STATUS={'active': 0.0001, 'low_power': 0.2589, 'damaged': 0.7409}
 [step 115 | tick 119 | TRACK  ] POS=[19, 9] BAT=070 RES=08 -> ACTION=MOVE_N
-       REASON: Entropy 3.49 bits; best goal GO_TO@(19, 8)->SCAN gives 1.32 bits (cost 1 bat); reserve 8 satisfied (70-1=69).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(19, 8)->SCAN; reserve 8 satisfied (70-1=69).
        OBS:    POS=[19, 8] BAT=069 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(19,9) P=0.3823 ENTROPY=3.49b CONF=0.64 STATUS={'active': 0.0001, 'low_power': 0.2589, 'damaged': 0.7409}
 [step 116 | tick 120 | TRACK  ] POS=[19, 8] BAT=069 RES=09 -> ACTION=SCAN_SIGNAL
@@ -475,12 +475,20 @@
        REASON: Executing plan towards GO_TO@(19, 7)->SCAN; reserve 10 satisfied (66-2=64).
        OBS:    POS=[19, 7] BAT=064 BUMP=False SIG=[STR=0.567 BRG=353.1°] CLUES=[None]
        BELIEF: MAP=(19,6) P=0.6409 ENTROPY=1.30b CONF=0.96 STATUS={'active': 0.0004, 'low_power': 0.9979, 'damaged': 0.0017}
-[EVENT | tick 123] Strategy changed from VERIFY to DECLARE: location conf 0.96 >= 0.90 and status conf 1.00 >= 0.70, DECLARING
 [step 119 | tick 123 | VERIFY ] POS=[19, 7] BAT=064 RES=10 -> ACTION=MOVE_N
-       REASON: Entropy 1.30 bits; best goal GO_TO@(19, 5)->SCAN gives 0.83 bits (cost 1 bat); reserve 10 satisfied (64-1=63).
+       REASON: [SUSPECTED DECOY] Contradictory reading detected (>3σ under MAP); confirming from viewpoint GO_TO@(19, 5)->SCAN; reserve 10 satisfied (64-1=63).
        OBS:    POS=[19, 6] BAT=063 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(19,6) P=0.6409 ENTROPY=1.30b CONF=0.96 STATUS={'active': 0.0004, 'low_power': 0.9979, 'damaged': 0.0017}
-[step 120 | tick 124 | DECLARE] POS=[19, 6] BAT=063 RES=11 -> ACTION=DECLARE
-       REASON: Mission complete: target localized at (19, 6) with confidence 0.96 and status 'low_power' (1.00).
-       OBS:    POS=[19, 6] BAT=063 BUMP=False SIG=[None] CLUES=[None]
+[step 120 | tick 124 | VERIFY ] POS=[19, 6] BAT=063 RES=11 -> ACTION=MOVE_N
+       REASON: Executing plan towards GO_TO@(19, 5)->SCAN; reserve 11 satisfied (63-1=62).
+       OBS:    POS=[19, 5] BAT=062 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(19,6) P=0.6409 ENTROPY=1.30b CONF=0.96 STATUS={'active': 0.0004, 'low_power': 0.9979, 'damaged': 0.0017}
+[EVENT | tick 125] Strategy changed from VERIFY to DECLARE: location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING
+[step 121 | tick 125 | VERIFY ] POS=[19, 5] BAT=062 RES=12 -> ACTION=SCAN_SIGNAL
+       REASON: Executing plan towards GO_TO@(19, 5)->SCAN; reserve 12 satisfied (62-2=60).
+       OBS:    POS=[19, 5] BAT=060 BUMP=False SIG=[STR=0.681 BRG=163.3°] CLUES=[None]
+       BELIEF: MAP=(19,6) P=0.9957 ENTROPY=0.05b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
+[step 122 | tick 126 | DECLARE] POS=[19, 5] BAT=060 RES=12 -> ACTION=DECLARE
+       REASON: Mission complete: target localized at (19, 6) with confidence 1.00 and status 'low_power' (1.00).
+       OBS:    POS=[19, 5] BAT=060 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(19,6) P=0.9957 ENTROPY=0.05b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}

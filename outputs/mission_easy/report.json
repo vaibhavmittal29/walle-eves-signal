@@ -7,6 +7,52 @@
     "total_steps": 20,
     "ticks_used": 20
   },
+  "environment": {
+    "grid_size": [
+      12,
+      12
+    ],
+    "chargers": [
+      [
+        1,
+        1
+      ]
+    ],
+    "walls": [
+      [
+        4,
+        4
+      ],
+      [
+        6,
+        1
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        9,
+        5
+      ],
+      [
+        1,
+        7
+      ],
+      [
+        5,
+        10
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        4,
+        11
+      ]
+    ]
+  },
   "final_answer": {
     "inferred_location": [
       6,
@@ -32,6 +78,9 @@
   },
   "resource_utilization": {
     "battery_used": 21,
+    "net_battery_change": 21,
+    "battery_consumed_by_actions": 21,
+    "recharge_energy_delivered": 0,
     "recharges_count": 0,
     "distance_travelled": 17.0,
     "min_battery_margin": 79,

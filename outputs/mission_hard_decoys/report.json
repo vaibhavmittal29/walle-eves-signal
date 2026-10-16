@@ -4,8 +4,170 @@
     "seed": 99,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 120,
-    "ticks_used": 125
+    "total_steps": 122,
+    "ticks_used": 127
+  },
+  "environment": {
+    "grid_size": [
+      20,
+      20
+    ],
+    "chargers": [
+      [
+        2,
+        2
+      ],
+      [
+        15,
+        9
+      ],
+      [
+        6,
+        17
+      ]
+    ],
+    "walls": [
+      [
+        14,
+        1
+      ],
+      [
+        19,
+        0
+      ],
+      [
+        3,
+        16
+      ],
+      [
+        5,
+        16
+      ],
+      [
+        10,
+        6
+      ],
+      [
+        13,
+        11
+      ],
+      [
+        15,
+        2
+      ],
+      [
+        16,
+        10
+      ],
+      [
+        18,
+        13
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        14,
+        12
+      ],
+      [
+        9,
+        7
+      ],
+      [
+        5,
+        18
+      ],
+      [
+        11,
+        1
+      ],
+      [
+        9,
+        13
+      ],
+      [
+        13,
+        1
+      ],
+      [
+        15,
+        18
+      ],
+      [
+        18,
+        6
+      ],
+      [
+        15,
+        19
+      ],
+      [
+        12,
+        5
+      ],
+      [
+        14,
+        11
+      ],
+      [
+        3,
+        8
+      ],
+      [
+        4,
+        16
+      ],
+      [
+        5,
+        8
+      ],
+      [
+        9,
+        9
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        1,
+        4
+      ],
+      [
+        11,
+        6
+      ],
+      [
+        9,
+        15
+      ],
+      [
+        11,
+        15
+      ],
+      [
+        2,
+        18
+      ],
+      [
+        18,
+        11
+      ],
+      [
+        6,
+        9
+      ],
+      [
+        7,
+        14
+      ]
+    ]
   },
   "final_answer": {
     "inferred_location": [
@@ -14,30 +176,33 @@
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 0.0004061502424401137,
-      "low_power": 0.9978800018338545,
-      "damaged": 0.001713847923705376
+      "active": 4.076346193293567e-06,
+      "low_power": 0.9999784770151121,
+      "damaged": 1.7446638694667784e-05
     },
-    "location_confidence": 0.962,
-    "status_confidence": 0.998,
+    "location_confidence": 1.0,
+    "status_confidence": 1.0,
     "credible_region_90": {
-      "cell_count": 2,
+      "cell_count": 1,
       "bounding_box": {
         "x_min": 19,
-        "y_min": 5,
+        "y_min": 6,
         "x_max": 19,
         "y_max": 6
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 137,
+    "battery_used": 136,
+    "net_battery_change": 40,
+    "battery_consumed_by_actions": 136,
+    "recharge_energy_delivered": 96,
     "recharges_count": 5,
-    "distance_travelled": 95.0,
+    "distance_travelled": 96.0,
     "min_battery_margin": 4,
-    "time_ticks_used": 125
+    "time_ticks_used": 127
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (96.2%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       19,
@@ -47,9 +212,9 @@
     "location_error_cells": 1.0,
     "status_correct": true,
     "success": true,
-    "credible_region_hit": true
+    "credible_region_hit": false
   },
-  "evidence_count": 20,
+  "evidence_count": 21,
   "discounted_evidence_count": 5,
   "strategy_transitions_count": 6
 }

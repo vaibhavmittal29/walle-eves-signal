@@ -19,6 +19,7 @@ def generate_report(
     strategy_history: List[Dict[str, Any]],
     out_dir: Union[str, Path],
     belief: Optional[Belief] = None,
+    info: Optional[Any] = None,
 ) -> Tuple[Path, Path]:
     """Generate comprehensive report.json and report.md in the designated output directory.
 
@@ -100,6 +101,11 @@ def generate_report(
             "total_steps": result.steps,
             "ticks_used": result.ticks_used,
         },
+        "environment": {
+            "grid_size": [info.width, info.height] if info is not None else [20, 20],
+            "chargers": [list(c) for c in info.chargers] if info is not None else [],
+            "walls": [list(w) for w in info.walls] if info is not None else [],
+        },
         "final_answer": {
             "inferred_location": list(result.declared_location),
             "inferred_status": result.declared_status,
@@ -113,6 +119,9 @@ def generate_report(
         },
         "resource_utilization": {
             "battery_used": result.battery_used,
+            "net_battery_change": getattr(result, "net_battery_change", result.battery_used),
+            "battery_consumed_by_actions": getattr(result, "battery_consumed_by_actions", result.battery_used),
+            "recharge_energy_delivered": getattr(result, "recharge_energy_delivered", 0),
             "recharges_count": result.recharges_count,
             "distance_travelled": result.distance_travelled,
             "min_battery_margin": result.min_battery_margin,
@@ -146,6 +155,10 @@ def generate_report(
 
     # Read empirical calibration statistics if available
     calib_md_path = Path("outputs/calibration.md")
+    if not calib_md_path.exists():
+        repo_root = Path(__file__).resolve().parents[2]
+        calib_md_path = repo_root / "outputs" / "calibration.md"
+
     calib_statement = "Nominal 90% Bayesian credible region."
     if calib_md_path.exists():
         try:

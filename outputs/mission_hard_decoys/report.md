@@ -4,24 +4,24 @@
 - **Configuration:** `mission_hard_decoys` (Master Seed: `99`)
 - **Agent Architecture:** `bayes_planner` (Exact Bayesian Grid Filter + EIG Planner)
 - **Outcome:** **DECLARED**
-- **Duration:** 120 action steps (125 environment ticks)
+- **Duration:** 122 action steps (127 environment ticks)
 
 ---
 
 ## 2. Final Inferred Answer
 - **Inferred Location:** `(19, 6)`
-- **Location Confidence:** 96.2% mass within 1.5-cell radius
-- **Inferred Status:** `low_power` (Confidence: 99.8%)
-- **Status Probabilities:** `active`: 0.0%, `low_power`: 99.8%, `damaged`: 0.2%
+- **Location Confidence:** 100.0% mass within 1.5-cell radius
+- **Inferred Status:** `low_power` (Confidence: 100.0%)
+- **Status Probabilities:** `active`: 0.0%, `low_power`: 100.0%, `damaged`: 0.0%
 - **90% Credible Region:**
-  - Encompasses **2 cells**
-  - Spatial Bounding Box: `[19, 5]` to `[19, 6]`
+  - Encompasses **1 cells**
+  - Spatial Bounding Box: `[19, 6]` to `[19, 6]`
 - **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ---
 
 ## 3. Evidence Table
-Total pieces of evidence collected: **20**.
+Total pieces of evidence collected: **21**.
 
 ### Top Most Influential Observations:
 | Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
@@ -42,11 +42,11 @@ Total pieces of evidence collected: **20**.
 ---
 
 ## 4. Resource Utilization
-- **Battery Consumed:** 137 energy units
+- **Battery Consumed:** 136 energy units
 - **Recharge Cycles:** 5 station dockings
 - **Minimum Energy Margin:** 4 battery units remaining (Safe Return guaranteed)
-- **Total Distance Travelled:** 95.0 cells
-- **Time Budget Consumed:** 125 ticks
+- **Total Distance Travelled:** 96.0 cells
+- **Time Budget Consumed:** 127 ticks
 
 ---
 
@@ -59,12 +59,12 @@ Chronological record of high-level autonomous strategy shifts:
 | 92 | `RECHARGE` | `EXPLORE` | battery replenished (100/100), resuming EXPLORE |
 | 110 | `EXPLORE` | `TRACK` | location confidence 0.66 >= 0.50, switching to TRACK |
 | 118 | `TRACK` | `VERIFY` | location confidence 0.96 >= 0.75, switching to VERIFY |
-| 119 | `VERIFY` | `DECLARE` | location conf 0.96 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
+| 121 | `VERIFY` | `DECLARE` | location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
 
 ---
 
 ## 6. Recommended Next Step
-**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (96.2%).
+**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (100.0%).
 
 **Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.
 
@@ -78,7 +78,7 @@ Chronological record of high-level autonomous strategy shifts:
 - **True Operational Status:** `low_power`
 - **Localization Error:** **1.00 cells**
 - **Status Classification Correct:** **YES**
-- **Truth Inside 90% Credible Region:** **YES**
+- **Truth Inside 90% Credible Region:** **NO**
 - **Overall Mission Objective:** **SUCCESS**
 
 ---

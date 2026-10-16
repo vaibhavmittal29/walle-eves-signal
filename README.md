@@ -85,11 +85,11 @@ python -m walle viz --run outputs/mission_medium_seed7
 ### 3.4 Running the Test Suite & Benchmark
 
 ```bash
-# Run the full test suite including Monte Carlo fuzz tests (74 passed in ~461s)
+# Run the full test suite including Monte Carlo fuzz tests (84 passed)
 pytest -q
 
-# Or run fast unit/integration tests excluding long fuzzing (73 passed in ~45s)
-pytest -v -k "not test_fuzz_200_random_configs"
+# Or run fast unit/integration tests excluding long fuzzing (83 passed in ~45s)
+pytest -v --ignore=tests/test_robustness_fuzz.py
 
 # Run the 100-mission head-to-head generalization benchmark across all 3 agents
 python -m walle benchmark --n 100 --out outputs/benchmark --seed 42
@@ -263,10 +263,19 @@ This formulation mathematically favors viewpoints that provide orthogonal triang
 Every step emits a structured JSONL record and a human-readable text line:
 
 ```text
-[step 027 | tick 026 | EXPLORE] POS=[5, 13] BAT=072 RES=19 -> ACTION=SCAN_SIGNAL
-       REASON: Executing plan towards GO_TO@(5, 13)->SCAN; reserve 19 satisfied (72-2=70).
-       OBS:    POS=[5, 13] BAT=070 BUMP=False SIG=[STR=0.581 BRG=301.0°] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.6837 ENTROPY=1.20b CONF=0.99 STATUS={'active': 0.0002, 'low_power': 0.9998, 'damaged': 0.0}
+[step 025 | tick 024 | TRACK  ] POS=[3, 13] BAT=074 RES=17 -> ACTION=SCAN_SIGNAL
+       REASON: Executing plan towards GO_TO@(3, 13)->SCAN; reserve 17 satisfied (74-2=72).
+       OBS:    POS=[3, 13] BAT=072 BUMP=False SIG=[STR=0.581 BRG=31.0°] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
+[EVENT | tick 025] Strategy changed from VERIFY to DECLARE: location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING
+[step 026 | tick 025 | VERIFY ] POS=[3, 13] BAT=072 RES=17 -> ACTION=MOVE_N
+       REASON: Entropy 0.12 bits; best goal GO_TO@(3, 12)->SCAN gives 0.10 bits (cost 1 bat); reserve 17 satisfied (72-1=71).
+       OBS:    POS=[3, 12] BAT=071 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
+[step 027 | tick 026 | DECLARE] POS=[3, 12] BAT=071 RES=16 -> ACTION=DECLARE
+       REASON: Mission complete: target localized at (4, 12) with confidence 1.00 and status 'low_power' (1.00).
+       OBS:    POS=[3, 12] BAT=071 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
 ```
 
 ### 7.2 Mission Report (`report.md`)
@@ -277,16 +286,16 @@ At mission conclusion, WALL-E compiles an 8-section Markdown report:
 # WALL-E Mission Report: mission_medium
 ## 2. Final Inferred Answer
 - **Inferred Location:** `(4, 12)`
-- **Location Confidence:** 99.3% mass within 1.5-cell radius
+- **Location Confidence:** 100.0% mass within 1.5-cell radius
 - **Inferred Status:** `low_power` (Confidence: 100.0%)
 - **Status Probabilities:** `active`: 0.0%, `low_power`: 100.0%, `damaged`: 0.0%
 - **90% Credible Region:**
-  - Encompasses **2 cells**
-  - Spatial Bounding Box: `[3, 12]` to `[4, 12]`
+  - Encompasses **1 cells**
+  - Spatial Bounding Box: `[4, 12]` to `[4, 12]`
 - **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ## 6. Recommended Next Step
-**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (99.3%).
+**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (100.0%).
 
 **Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.
 ```
@@ -295,12 +304,15 @@ At mission conclusion, WALL-E compiles an 8-section Markdown report:
 
 ## 8. Experimental Results & Benchmarks
 
-### 8.1 Visual Mission Summary
+### 8.1 Visual Mission Summary & Analytical Artifacts
 
-Below is the composite visualization generated from [`outputs/mission_medium_seed7/summary.png`](outputs/mission_medium_seed7/summary.png), showing:
-1. Spatial grid with wall layout, charger positions, search trajectory color-coded by strategy, belief heatmap, and declared target.
-2. Battery reserves curve tracking energy consumption against the dynamic safe-return threshold.
-3. Information-theoretic convergence showing joint Shannon entropy (bits) and spatial confidence percentage across time.
+For every mission execution, the visual analytics pipeline generates six comprehensive, high-resolution diagnostic artifacts:
+1. **Mission Summary Composite** ([`summary.png`](outputs/mission_medium_seed7/summary.png)): 3-panel view combining 2D trajectory on belief heatmap, dynamic battery reserve curve, and Shannon entropy reduction timeline.
+2. **Animated Execution GIF** ([`run.gif`](outputs/mission_medium_seed7/run.gif)): Step-by-step animation of search progress and spatial belief convergence.
+3. **2D Trajectory Path Map** ([`path_map.png`](outputs/mission_medium_seed7/path_map.png)): Clear navigation route detailing strategy transitions (`EXPLORE`, `TRACK`, `VERIFY`, `DECLARE`), obstacle boundaries, and charger stations.
+4. **3D Spatio-Temporal Trajectory** ([`path_3d.png`](outputs/mission_medium_seed7/path_3d.png)): 3D visualization showing spatial progression $(x, y)$ plotted along the vertical time axis (ticks).
+5. **Belief Evolution Multiples** ([`belief_evolution.png`](outputs/mission_medium_seed7/belief_evolution.png)): 6 sequential belief snapshots tracking posterior concentration from diffuse prior to unimodal MAP.
+6. **Operational Metrics Dashboard** ([`metrics_dashboard.png`](outputs/mission_medium_seed7/metrics_dashboard.png)): 2x2 dashboard tracking battery reserve margin, cumulative distance, step duration, and sensor information gain bits per step.
 
 ![WALL-E Mission Summary](outputs/mission_medium_seed7/summary.png)
 
@@ -314,14 +326,20 @@ Evaluated across 100 distinct random worlds (varying grid dimensions $12\times 1
 
 | Architecture | Success Rate | Mean Loc Error (cells) | Median Loc Error | Status Accuracy | Credible Hit (90%) | Mean Battery | Mean Recharges | Mean Ticks | Stranded Rate |
 |---|---|---|---|---|---|---|---|---|---|
-| **Random Agent** | **3.0%** | 9.98 | 9.22 | 28.0% | 0.0% | 865.7 | 42.0 | 137.5 | **0.0%** |
-| **Greedy Bearing Agent** | **6.0%** | 6.19 | 3.16 | 28.0% | 0.0% | 944.1 | 46.0 | 202.8 | **0.0%** |
-| **Bayes Planner Agent (Ours)** | **99.0%** | 0.30 | 0.00 | 100.0% | 95.0% | 37.6 | 0.3 | 34.3 | **0.0%** |
+| **Random Agent** | **3.0%** | 9.98 | 9.22 | 28.0% | 0.0% | 62.6 | 42.0 | 137.5 | **0.0%** |
+| **Greedy Bearing Agent** | **6.0%** | 6.61 | 4.12 | 28.0% | 0.0% | 142.8 | 46.0 | 203.1 | **0.0%** |
+| **Bayes Planner Agent (Ours)** | **98.0%** | 0.30 | 0.00 | 98.0% | 94.0% | 63.0 | 1.6 | 56.7 | **0.0%** |
 
 > **Note on Battery & Resource Metrics:**  
 > `RandomAgent` and `GreedyBearingAgent` wander into charging stations and recharge multiple times across their missions (or run until the 250-tick timeout), resulting in cumulative gross energy consumption exceeding nominal single-charge battery capacity (60–120 units). In contrast, `BayesPlannerAgent` localizes EVE efficiently with active information gathering, declaring completion in far fewer steps without unnecessary recharge loops.
 
-*Key Takeaway: The Bayesian Planner achieves a **99.0% success rate** with **0.30 cells mean error** (median 0.00 cells), consuming only **37.6 battery units** on average across 34.3 ticks, while completely avoiding stranding (0.0%).*
+*Key Takeaway: The Bayesian Planner achieves a **98.0% success rate** with **0.30 cells mean error** (median 0.00 cells), consuming **63.0 battery units** and **1.6 recharges** on average across 56.7 ticks, while completely avoiding stranding (0.0%).*
+
+#### Statistical & Information-Theoretic Diagnostics
+- **Empirical Error CDF** ([`error_cdf.png`](outputs/benchmark/error_cdf.png)): Demonstrates that over 98% of Bayes Planner runs yield localization error $\le 1.0$ cell, whereas random and greedy baselines fail the 2.0-cell success bound.
+- **Status Confusion Matrix** ([`status_confusion_matrix.png`](outputs/benchmark/status_confusion_matrix.png)): Confirms 98% diagonal accuracy across `active`, `low_power`, and `damaged` classifications.
+- **Reliability Diagram / Calibration** ([`calibration.png`](outputs/benchmark/calibration.png)): Shows empirical accuracy closely tracking declared confidence along the $y=x$ ideal line.
+- **Spatial Entropy Convergence** ([`entropy_convergence.png`](outputs/benchmark/entropy_convergence.png)): Displays exponential decline in joint Shannon entropy from ~9.0 bits to <0.5 bits.
 
 ---
 
@@ -331,10 +349,24 @@ Tested on [`configs/mission_hard_decoys.yaml`](configs/mission_hard_decoys.yaml)
 
 | Metric | Naive Planner ($\epsilon = 0.0$) | Robust Planner ($\epsilon = 0.15$) | Delta (Robust vs. Naive) |
 |---|---|---|---|
-| **Mission Success Rate** | 68.0% | **90.0%** | **+22.0%** |
-| **Mean Location Error** | 2.47 cells | **1.02 cells** | **-1.45 cells** |
-| **Mean Battery Consumed** | 65.1 units | **74.6 units** | **+9.5 units** |
+| **Mission Success Rate** | 60.0% | **90.0%** | **+30.0%** |
+| **Mean Location Error** | 2.42 cells | **1.12 cells** | **-1.30 cells** |
+| **Median Location Error** | 1.00 cells | **0.00 cells** | **-1.00 cells** |
+| **Mean Battery Consumed** | 72.1 units | **89.4 units** | **+17.3 units** |
+| **Mean Mission Steps** | 65.7 steps | **77.9 steps** | **+12.2 steps** |
 | **Stranded Rate** | **0.0%** | **0.0%** | **0.0%** |
+
+---
+
+### 8.4 Evaluation Methodology: Inferences vs. Epoch Training Loss
+
+Unlike deep reinforcement learning or supervised regression models that optimize surrogate loss functions across training epochs, WALL-E operates via **exact Bayesian recursive state estimation** and **active decision-theoretic planning**:
+- **Why No "Training Loss":** The exact Bayesian grid filter does not employ parameterized neural weights or stochastic gradient descent; instead, it executes mathematically closed-form probability updates:
+  $$B_{t+1}(x, y, k) \propto B_t(x, y, k) \cdot P(z_t \mid x, y, k)$$
+- **Evaluation Criteria:** Performance is evaluated using principled statistical metrics:
+  1. **Empirical Credible Coverage:** Verified via 200-mission calibration study ($93.0\%$ empirical coverage for nominal $90\%$ credible intervals).
+  2. **Information-Theoretic Efficiency:** Measured via Shannon entropy reduction ($\Delta H$ bits) and Expected Information Gain (EIG) per battery unit consumed.
+  3. **Operational Robustness:** Guaranteed zero stranding ($0.0\%$ stranded rate across 300+ randomized runs) through provable BFS safe-return invariants.
 
 ---
 
@@ -408,7 +440,7 @@ walle-eves-signal/
 │   ├── strategies.py            # Strategy state machine and utility weights
 │   ├── trace.py                 # JSONL and text trace loggers
 │   └── viz.py                   # ASCII, Matplotlib 3-panel, and GIF engine
-└── tests/                       # Unit and integration test suite (74 tests)
+└── tests/                       # Unit and integration test suite (84 tests)
     ├── test_agent_config_influence.py # Configuration overrides test
     ├── test_agent_invariants.py # 100-seed safety test (0% stranded)
     ├── test_belief.py           # Triangulation convergence and entropy tests
@@ -434,11 +466,11 @@ walle-eves-signal/
 
 ### Running Tests
 ```bash
-# Run the complete test suite (74 passed in ~461s)
+# Run the complete test suite (84 passed)
 pytest -q
 
-# Run all unit/integration tests excluding long fuzzing (73 passed in ~45s)
-pytest -v -k "not test_fuzz_200_random_configs"
+# Run all unit/integration tests excluding long fuzzing (83 passed in ~45s)
+pytest -v --ignore=tests/test_robustness_fuzz.py
 
 # Run the strict architectural separation test
 pytest -v tests/test_separation.py

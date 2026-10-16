@@ -53,12 +53,34 @@ def test_visuals_generation_creates_valid_png_and_gif(tmp_path: Path):
 
     assert summary_path.exists()
     assert gif_path.exists()
+    assert (out_dir / "path_map.png").exists()
+    assert (out_dir / "path_3d.png").exists()
+    assert (out_dir / "belief_evolution.png").exists()
+    assert (out_dir / "metrics_dashboard.png").exists()
+    assert (out_dir / "predictions.json").exists()
+    assert (out_dir / "run.log").exists()
 
     # Open with Pillow to verify image validity
     with Image.open(summary_path) as s_img:
         assert s_img.size[0] > 500
         assert s_img.size[1] > 200
         assert s_img.format == "PNG"
+
+    with Image.open(out_dir / "path_map.png") as pm_img:
+        assert pm_img.size[0] > 500
+        assert pm_img.format == "PNG"
+
+    with Image.open(out_dir / "path_3d.png") as p3_img:
+        assert p3_img.size[0] > 500
+        assert p3_img.format == "PNG"
+
+    with Image.open(out_dir / "belief_evolution.png") as be_img:
+        assert be_img.size[0] > 500
+        assert be_img.format == "PNG"
+
+    with Image.open(out_dir / "metrics_dashboard.png") as md_img:
+        assert md_img.size[0] > 500
+        assert md_img.format == "PNG"
 
     with Image.open(gif_path) as g_img:
         assert g_img.is_animated is True
