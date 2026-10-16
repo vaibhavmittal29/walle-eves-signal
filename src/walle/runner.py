@@ -12,7 +12,7 @@ from walle.actions import Action, ActionType, cost_of
 from walle.agent import BayesPlannerAgent, Decision
 from walle.baselines import GreedyBearingAgent, RandomAgent
 from walle.belief import Belief
-from walle.config import AppConfig, MissionSectionConfig, load_config
+from walle.config import AppConfig, MissionSectionConfig, load_config, validate_config
 from walle.environment import Environment
 from walle.geometry import distance
 from walle.observations import Observation, PublicMissionInfo
@@ -68,6 +68,7 @@ def run_mission(
     """
     if isinstance(config_path, AppConfig):
         cfg = config_path
+        validate_config(cfg)
     else:
         cfg = load_config(config_path)
 

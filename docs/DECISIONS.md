@@ -92,3 +92,9 @@ This document records all architectural choices, assumptions, and key decisions 
 - **A7 Empirical Calibration**: Evaluated 200 randomized missions, confirming 93.0% empirical coverage for nominal 90% credible regions, with zero overconfidence.
 - **A8 Truly Naive Ablation**: Disabled contradiction detection and delayed declarations when `assumed_spoof_rate == 0.0`, ensuring fair ablation comparisons.
 - **A9 Evidence Reporting & Honesty**: Replaced fixed calibration claims with dynamic empirical metrics, counted all physical clues in total evidence, and added full clue attribution rows with information gain bits.
+
+## Remediation Phase 1: Comprehensive Configuration Validation & Mode Schema
+- **Boolean Rejection**: Standard Python type checks treat booleans as integers (`isinstance(True, int) == True`). Added `_validate_int` and `_validate_float` that explicitly reject `bool` inputs for all numerical parameters.
+- **Initial Signal Modes**: Introduced `InitialSignalConfig.mode` supporting `configured` and `generated`. In `generated` mode, initial sensor readings are sampled directly from ground truth by the simulator environment at reset, allowing bearing/strength to be omitted from configuration without raising validation errors.
+- **Unified Validation**: In `runner.py`, `run_mission()` now directly validates incoming `AppConfig` objects via `validate_config(cfg)` to eliminate redundant/inconsistent checks.
+- **Cost & Radius Range**: Enforced that `ScanAreaCost.max_radius` is constrained to `[1, min(width, height)]` and that all action costs and recharge gains are non-negative and finite.

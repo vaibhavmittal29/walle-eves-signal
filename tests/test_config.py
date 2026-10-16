@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from walle.config import (
+    AgentConfig,
     AppConfig,
     ConfigError,
     GridConfig,
@@ -134,3 +135,57 @@ def test_invalid_safety_margins():
     cfg_neg = AppConfig(agent=AgentConfig(safety=AgentSafety(margin_flat=-1)))
     with pytest.raises(ConfigError, match="Agent safety margin_flat cannot be negative"):
         validate_config(cfg_neg)
+
+
+@pytest.mark.parametrize(
+    "bad_cfg,err_match",
+    [
+        (AppConfig(mission=MissionSectionConfig(grid=GridConfig(width=True))), "must be an int"),
+        (AppConfig(mission=MissionSectionConfig(grid=GridConfig(height=False))), "must be an int"),
+        (AppConfig(mission=MissionSectionConfig(seed=True)), "must be an int"),
+        (AppConfig(mission=MissionSectionConfig(start=(True, 2))), "must be an int"),
+        (AppConfig(mission=MissionSectionConfig(obstacles=ObstaclesConfig(density=True))), "must be a float"),
+        (AppConfig(resources=ResourcesConfig(battery_capacity=True)), "must be an int"),
+        (AppConfig(agent=AgentConfig(mc_samples=False)), "must be an int"),
+    ],
+)
+def test_bool_rejected_for_numeric_fields(bad_cfg, err_match):
+    """Boolean values passed where numbers are expected must be rejected."""
+    with pytest.raises(ConfigError, match=err_match):
+        validate_config(bad_cfg)
+
+
+def test_initial_signal_mode_semantics():
+    """Initial signal mode supports 'configured' and 'generated'."""
+    # generated mode with all None fields is valid
+    cfg_gen = AppConfig(initial_signal=InitialSignalConfig(mode="generated", bearing_deg=None, coordinates=None, strength=None))
+    validate_config(cfg_gen)
+
+    # invalid mode raises error
+    cfg_bad_mode = AppConfig(initial_signal=InitialSignalConfig(mode="unsupported_mode"))
+    with pytest.raises(ConfigError, match="Unknown initial_signal mode"):
+        validate_config(cfg_bad_mode)
+
+
+def test_scan_area_cost_and_radius_bounds():
+    """ScanAreaCost max_radius must be in [1, min(w, h)] and costs non-negative."""
+    from walle.observations import ScanAreaCost
+    from walle.config import CostsConfig
+    # max_radius < 1
+    cfg_low = AppConfig(resources=ResourcesConfig(costs=CostsConfig(scan_area=ScanAreaCost(max_radius=0))))
+    with pytest.raises(ConfigError, match="max_radius"):
+        validate_config(cfg_low)
+
+    # max_radius > min(w, h)
+    cfg_high = AppConfig(resources=ResourcesConfig(costs=CostsConfig(scan_area=ScanAreaCost(max_radius=50))))
+    with pytest.raises(ConfigError, match="max_radius"):
+        validate_config(cfg_high)
+
+
+def test_run_mission_validates_appconfig_directly():
+    """Calling run_mission with an invalid AppConfig raises ConfigError directly."""
+    from walle.runner import run_mission
+    bad_cfg = AppConfig(resources=ResourcesConfig(battery_capacity=-10))
+    with pytest.raises(ConfigError, match="Battery capacity must be positive"):
+        run_mission(bad_cfg)
+
