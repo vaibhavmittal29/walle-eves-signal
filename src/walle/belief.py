@@ -97,40 +97,81 @@ class Belief:
         self.last_entropy_reduction = max(0.0, float(prev_entropy - new_entropy))
         return self.last_kl_divergence
 
-    def predict(self, drift_sigma: float = 0.5) -> None:
+    def predict(
+        self,
+        mobility_type: str = "random_walk",
+        diffusion_sigma: float = 0.5,
+        drift_sigma: Optional[float] = None,
+        p_stay: float = 0.5,
+    ) -> None:
         """Propagate belief according to target mobility dynamics.
 
-        Computes exact transition probabilities matching the simulator's random walk policy:
-        From cell (x, y), target stays with prob 0.5 and moves to a random free 4-neighbor with prob 0.5.
-        Walls and borders are strictly respected, and probability mass is conserved.
+        Supported mobility types:
+        - 'stationary' / 'static': no prediction; target remains in place.
+        - 'random_walk': 4-connected discrete step with p_stay (0.5) and (1 - p_stay)
+          split equally among free 4-neighbors (wall-aware, mass conserved).
+        - 'diffusion': discrete Gaussian kernel on the grid with parameter diffusion_sigma
+          (wall-aware, truncated at obstacle boundaries, mass conserved).
         """
-        if drift_sigma <= 0.0:
+        # Backward compatibility for drift_sigma
+        if drift_sigma is not None and drift_sigma <= 0.0:
+            return
+        if mobility_type in ("stationary", "static"):
             return
 
         h, w = self._height, self._width
         new_grid = np.zeros_like(self._grid)
 
-        # Precompute transitions for each free cell
-        for y in range(h):
-            for x in range(w):
-                if (x, y) in self._walls:
-                    continue
+        if mobility_type == "random_walk":
+            for y in range(h):
+                for x in range(w):
+                    if (x, y) in self._walls:
+                        continue
 
-                nbrs = [(x + dx, y + dy) for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))]
-                valid_nbrs = [
-                    n for n in nbrs
-                    if 0 <= n[0] < w and 0 <= n[1] < h and n not in self._walls
-                ]
+                    nbrs = [(x + dx, y + dy) for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))]
+                    valid_nbrs = [
+                        n for n in nbrs
+                        if 0 <= n[0] < w and 0 <= n[1] < h and n not in self._walls
+                    ]
 
-                num_valid = len(valid_nbrs)
-                if num_valid > 0:
-                    p_stay = 0.5
-                    p_move = 0.5 / num_valid
-                    new_grid[y, x, :] += p_stay * self._grid[y, x, :]
-                    for nx, ny in valid_nbrs:
-                        new_grid[ny, nx, :] += p_move * self._grid[y, x, :]
-                else:
-                    new_grid[y, x, :] += self._grid[y, x, :]
+                    num_valid = len(valid_nbrs)
+                    if num_valid > 0:
+                        p_s = p_stay
+                        p_m = (1.0 - p_stay) / num_valid
+                        new_grid[y, x, :] += p_s * self._grid[y, x, :]
+                        for nx, ny in valid_nbrs:
+                            new_grid[ny, nx, :] += p_m * self._grid[y, x, :]
+                    else:
+                        new_grid[y, x, :] += self._grid[y, x, :]
+
+        elif mobility_type == "diffusion":
+            sig = drift_sigma if drift_sigma is not None else diffusion_sigma
+            if sig <= 0.0:
+                return
+            R = max(1, int(math.ceil(3.0 * sig)))
+
+            for y in range(h):
+                for x in range(w):
+                    if (x, y) in self._walls:
+                        continue
+
+                    valid_entries = []
+                    total_w = 0.0
+                    for dy in range(-R, R + 1):
+                        for dx in range(-R, R + 1):
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in self._walls:
+                                weight = math.exp(-0.5 * (dx * dx + dy * dy) / (sig * sig))
+                                valid_entries.append((nx, ny, weight))
+                                total_w += weight
+
+                    if total_w > 0:
+                        for nx, ny, weight in valid_entries:
+                            new_grid[ny, nx, :] += (weight / total_w) * self._grid[y, x, :]
+                    else:
+                        new_grid[y, x, :] += self._grid[y, x, :]
+        else:
+            raise ValueError(f"Unknown mobility_type '{mobility_type}'.")
 
         # Guarantee wall zeros and mass conservation
         for wx, wy in self._walls:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
@@ -177,7 +178,7 @@ class Environment:
 
         # Check termination conditions
         if not self._done:
-            # Random walk target movement if mobility enabled
+            # Target mobility movement
             if self._config.mission.eve.mobility == "random_walk":
                 ex, ey = self._world._eve_location
                 nbrs = [(ex + dx, ey + dy) for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))]
@@ -189,6 +190,28 @@ class Environment:
                 if valid_nbrs and self._rng.random() < 0.5:
                     idx = int(self._rng.integers(0, len(valid_nbrs)))
                     self._world._eve_location = valid_nbrs[idx]
+            elif self._config.mission.eve.mobility == "diffusion":
+                ex, ey = self._world._eve_location
+                sig = self._config.mission.eve.diffusion_sigma
+                R = max(1, int(math.ceil(3.0 * sig)))
+                candidates = []
+                weights = []
+                for dy in range(-R, R + 1):
+                    for dx in range(-R, R + 1):
+                        nx, ny = ex + dx, ey + dy
+                        if (
+                            0 <= nx < self._world._width
+                            and 0 <= ny < self._world._height
+                            and (nx, ny) not in self._world._walls
+                        ):
+                            w = math.exp(-0.5 * (dx * dx + dy * dy) / (sig * sig))
+                            candidates.append((nx, ny))
+                            weights.append(w)
+                if candidates:
+                    probs = np.array(weights, dtype=np.float64)
+                    probs /= np.sum(probs)
+                    chosen_idx = int(self._rng.choice(len(candidates), p=probs))
+                    self._world._eve_location = candidates[chosen_idx]
 
             # Stranded: 0 battery away from any charger
             if self._battery <= 0 and self._position not in self._world._chargers:

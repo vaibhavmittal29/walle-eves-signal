@@ -108,7 +108,9 @@ def run_mission(
             safety=cfg.agent.safety,
             assumed_spoof_rate=cfg.agent.assumed_spoof_rate,
             expected_clues=cfg.mission.clues.count,
-            drift_sigma=0.5 if cfg.mission.eve.mobility == "random_walk" else 0.0,
+            mobility=cfg.mission.eve.mobility,
+            diffusion_sigma=cfg.mission.eve.diffusion_sigma,
+            drift_sigma=0.5 if cfg.mission.eve.mobility == "random_walk" else (cfg.mission.eve.diffusion_sigma if cfg.mission.eve.mobility == "diffusion" else 0.0),
         )
     elif selected_agent_type == "greedy_bearing":
         agent = GreedyBearingAgent(seed=a_seed)

@@ -42,7 +42,8 @@ class ObstaclesConfig:
 class EveConfig:
     location: Union[Literal["random"], Tuple[int, int]] = "random"
     status: Union[Literal["random"], Literal["active", "low_power", "damaged"]] = "random"
-    mobility: Literal["static", "random_walk"] = "static"
+    mobility: Literal["static", "stationary", "random_walk", "diffusion"] = "stationary"
+    diffusion_sigma: float = 0.5
     min_distance_from_start: int = 8
 
 
@@ -286,8 +287,9 @@ def validate_config(cfg: AppConfig) -> None:
             raise ConfigError(f"EVE location {eve.location} cannot be identical to start cell.")
     if eve.status not in ("random", "active", "low_power", "damaged"):
         raise ConfigError(f"Unknown eve.status '{eve.status}'. Choose 'random', 'active', 'low_power', or 'damaged'.")
-    if eve.mobility not in ("static", "random_walk"):
-        raise ConfigError(f"Unknown eve.mobility '{eve.mobility}'. Choose 'static' or 'random_walk'.")
+    if eve.mobility not in ("static", "stationary", "random_walk", "diffusion"):
+        raise ConfigError(f"Unknown eve.mobility '{eve.mobility}'. Choose 'static', 'stationary', 'random_walk', or 'diffusion'.")
+    _validate_float(eve.diffusion_sigma, "eve.diffusion_sigma", min_val=0.0, strict_min=True)
     if eve.min_distance_from_start > (w + h):
         raise ConfigError(
             f"eve.min_distance_from_start ({eve.min_distance_from_start}) exceeds max grid span ({w+h})."

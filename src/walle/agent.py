@@ -60,6 +60,8 @@ class BayesPlannerAgent:
         assumed_spoof_rate: float = 0.0,
         expected_clues: int = 5,
         drift_sigma: float = 0.0,
+        mobility: str = "stationary",
+        diffusion_sigma: float = 0.5,
     ):
         self._master_seed = seed
         self._mc_samples = mc_samples
@@ -69,6 +71,11 @@ class BayesPlannerAgent:
         self._assumed_spoof_rate = assumed_spoof_rate
         self._expected_clues = expected_clues
         self._drift_sigma = drift_sigma
+        self._mobility = mobility
+        self._diffusion_sigma = diffusion_sigma
+        if drift_sigma > 0.0 and self._mobility in ("stationary", "static"):
+            self._mobility = "random_walk" if drift_sigma == 0.5 else "diffusion"
+            self._diffusion_sigma = drift_sigma
 
         self._info: Optional[PublicMissionInfo] = None
         self._belief: Optional[Belief] = None
@@ -182,11 +189,7 @@ class BayesPlannerAgent:
                 assumed_spoof_rate=max(0.80, self._assumed_spoof_rate),
             )
 
-        # Target mobility drift step
-        if self._drift_sigma > 0.0:
-            belief.predict(drift_sigma=self._drift_sigma)
-
-        # 2. Update belief from latest observation
+        # 2. Update belief from latest observation FIRST (observation reflects target at time t)
         if obs.signal is not None and obs.step > 0:
             self._scan_history.append(pos)
             # Evaluate confirmation evidence under documented rule
@@ -213,6 +216,13 @@ class BayesPlannerAgent:
             effective_prior=effective_prior,
         )
         self._clues_found = len(self._incorporated_clue_ids)
+
+        # Target mobility forward prediction for next decision step (t -> t+1)
+        if obs.step > 0 and not obs.done:
+            if self._mobility in ("random_walk", "diffusion"):
+                belief.predict(mobility_type=self._mobility, diffusion_sigma=self._diffusion_sigma)
+            elif self._drift_sigma > 0.0:
+                belief.predict(drift_sigma=self._drift_sigma)
 
         # 3. Strategy State Machine Transitions
         map_x, map_y = belief.map_estimate()
