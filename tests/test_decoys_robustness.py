@@ -121,7 +121,8 @@ def test_hard_mission_trace_and_report_contain_discounted_status(tmp_path: Path)
     assert "| Status |" in md_text
     assert "trusted" in md_text
 
-    rep_json = eval(json_path.read_text(encoding="utf-8").replace("true", "True").replace("false", "False").replace("null", "None"))
+    import json
+    rep_json = json.loads(json_path.read_text(encoding="utf-8"))
     assert "discounted_evidence_count" in rep_json
 
 

@@ -98,3 +98,58 @@ def test_runtime_agent_receives_only_public_types():
             break
         obs = env.step(action)
 
+
+def test_no_eval_or_exec_in_entire_codebase():
+    """Ensure zero dynamic execution via eval() or exec() anywhere in src/ or tests/."""
+    import pytest
+    root = Path(__file__).resolve().parents[1]
+    py_files = list((root / "src").rglob("*.py")) + list((root / "tests").rglob("*.py"))
+    assert len(py_files) >= 15, "Expected at least 15 python files in repository."
+
+    for p in py_files:
+        tree = ast.parse(p.read_text(encoding="utf-8"), filename=str(p))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in ("eval", "exec"):
+                    pytest.fail(f"Forbidden dynamic execution call '{node.func.id}()' found in {p.relative_to(root)}:{node.lineno}")
+
+
+def test_runtime_interceptor_audits_agent_attribute_access():
+    """Wrap PublicMissionInfo and Observation in an interceptor proxy to verify zero private attribute access."""
+    from walle.agent import BayesPlannerAgent
+    from walle.environment import Environment
+    from walle.observations import Observation, PublicMissionInfo
+
+    forbidden = {
+        "eve_location",
+        "_eve_location",
+        "eve_status",
+        "_eve_status",
+        "ground_truth",
+        "_ground_truth",
+        "_world",
+    }
+
+    class AuditedProxy:
+        def __init__(self, target):
+            self._target = target
+
+        def __getattr__(self, name):
+            if name in forbidden:
+                raise AttributeError(f"ILLEGAL ATTEMPT: Agent tried to access private attribute '{name}'!")
+            return getattr(self._target, name)
+
+    cfg = load_config(Path("configs/mission_easy.yaml"))
+    env = Environment(cfg)
+    info, obs = env.reset()
+
+    audited_info = AuditedProxy(info)
+    agent = BayesPlannerAgent(seed=42)
+    agent.reset(audited_info)
+
+    while not obs.done:
+        audited_obs = AuditedProxy(obs)
+        action, decision = agent.plan(audited_obs)
+        agent.observe(audited_obs)
+        obs = env.step(action)
+

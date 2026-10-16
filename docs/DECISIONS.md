@@ -168,3 +168,8 @@ This document records all architectural choices, assumptions, and key decisions 
 - **1:1 Belief Snapshot Synchronization**: Updated `TraceLogger` to capture and compress a belief spatial marginal frame for every single step $1..N$ into `belief_frames.npz`, ensuring exact index alignment with `trace.jsonl`.
 - **Ground Truth Information Boundary**: Enforced that true target location (EVE) and status are strictly hidden in all intermediate visualization frames and rendered exclusively on `is_final_frame=True` (post-mission evaluation).
 - **Start and Scan Landmarks**: Added explicit starting point indicators and per-step scan location markers on the spatial path overlay.
+
+## Remediation Phase 11: Test Quality & Architectural Separation Enforcement
+- **Zero-Dynamic Execution Standard**: Replaced an isolated `eval()` call in `test_decoys_robustness.py` with secure `json.loads()`. Added a global AST scanner test (`test_no_eval_or_exec_in_entire_codebase()`) asserting zero calls to `eval()` or `exec()` across all `.py` files in `src/` and `tests/`.
+- **Runtime Access Interceptor Proxy**: Implemented `test_runtime_interceptor_audits_agent_attribute_access()` which wraps both `PublicMissionInfo` and every `Observation` in an interceptor proxy. The proxy strictly raises `AttributeError` upon any probe to private world attributes (`_eve_location`, `eve_location`, `_eve_status`, `eve_status`, `ground_truth`, `_world`).
+- **Full-Mission Separation Verification**: Verified that the agent completes full mission executions cleanly through the audited proxy, demonstrating complete absence of ground-truth cheating or back-channel inspection.
