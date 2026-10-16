@@ -9,7 +9,7 @@ import numpy as np
 
 from walle.config import AppConfig, ConfigError
 from walle.geometry import bearing, distance
-from walle.observations import InitialSignal, PublicMissionInfo
+from walle.observations import InitialSignal, PublicMissionInfo, SignalReading
 
 
 @dataclass(frozen=True)
@@ -100,6 +100,54 @@ class World:
 
         # 5. Place decoys
         self._decoys = self._place_decoys()
+
+        # 6. Initialize initial signal and reading
+        self._initial_signal, self._initial_signal_reading = self._create_initial_signal()
+
+    def _create_initial_signal(self) -> Tuple[InitialSignal, Optional[SignalReading]]:
+        """Create initial signal specification and sensor reading based on mode."""
+        init_cfg = self._config.initial_signal
+        if init_cfg.mode == "configured":
+            init_sig = InitialSignal(
+                bearing_deg=init_cfg.bearing_deg,
+                coordinates=init_cfg.coordinates,
+                coordinates_sigma=init_cfg.coordinates_sigma,
+                strength=init_cfg.strength,
+                timestamp=init_cfg.timestamp,
+            )
+            if init_cfg.bearing_deg is not None or init_cfg.strength is not None:
+                reading = SignalReading(
+                    strength=init_cfg.strength,
+                    bearing_deg=init_cfg.bearing_deg,
+                    dropout=False,
+                    missing_bearing_reason=None if init_cfg.bearing_deg is not None else "not_provided",
+                )
+            else:
+                reading = None
+            return init_sig, reading
+        else:
+            # "generated" mode: samples initial observation ONCE at reset from actual target position and status
+            from walle.signal_model import sample_signal
+            sig = sample_signal(
+                agent_pos=self._start,
+                eve_pos=self._eve_location,
+                eve_status=self._eve_status,
+                sensor=self._config.sensor,
+                rng=np.random.default_rng(self._config.mission.seed + 555),
+                decoys=self._decoys,
+            )
+            init_sig = InitialSignal(
+                bearing_deg=sig.bearing_deg,
+                coordinates=None,
+                coordinates_sigma=4.0,
+                strength=sig.strength,
+                timestamp=0,
+            )
+            return init_sig, sig
+
+    def initial_signal_reading(self) -> Optional[SignalReading]:
+        """Return the initial sensor observation generated for mission start."""
+        return self._initial_signal_reading
 
     def _generate_obstacles(self) -> Tuple[frozenset[Tuple[int, int]], Set[Tuple[int, int]]]:
         """Generate obstacle set and verify full connectivity."""
@@ -281,34 +329,6 @@ class World:
         Strict separation guarantee: NO private fields (EVE position/status,
         clues, decoys) are leaked here.
         """
-        init_cfg = self._config.initial_signal
-        if init_cfg.bearing_deg is not None or init_cfg.coordinates is not None or init_cfg.strength is not None:
-            init_sig = InitialSignal(
-                bearing_deg=init_cfg.bearing_deg,
-                coordinates=init_cfg.coordinates,
-                coordinates_sigma=init_cfg.coordinates_sigma,
-                strength=init_cfg.strength,
-                timestamp=init_cfg.timestamp,
-            )
-        else:
-            # Simulator environment setup API: synthesize realistic initial signal internally
-            from walle.signal_model import sample_signal
-            sig = sample_signal(
-                agent_pos=self._start,
-                eve_pos=self._eve_location,
-                eve_status=self._eve_status,
-                sensor=self._config.sensor,
-                rng=np.random.default_rng(self._config.mission.seed + 555),
-                decoys=self._decoys,
-            )
-            init_sig = InitialSignal(
-                bearing_deg=sig.bearing_deg,
-                coordinates=None,
-                coordinates_sigma=4.0,
-                strength=sig.strength,
-                timestamp=0,
-            )
-
         sensor_prior = self._config.sensor.to_sensor_prior(
             assumed_spoof_rate=self._config.agent.assumed_spoof_rate
         )
@@ -323,7 +343,7 @@ class World:
             battery_initial=self._config.resources.battery_initial,
             time_budget=self._config.resources.time_budget,
             costs=self._config.resources.costs.to_cost_table(),
-            initial_signal=init_sig,
+            initial_signal=self._initial_signal,
             sensor_prior=sensor_prior,
         )
 

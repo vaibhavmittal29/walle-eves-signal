@@ -8,8 +8,8 @@ This ledger tracks the step-by-step remediation of the WALL-E & EVE's Signal rep
 | Phase | Description | Status | Tests Run | Commit SHA | Notes |
 |---|---|---|---|---|---|
 | **Phase 0** | Baseline: Clean env, pip install requirements & editable, baseline pytest | Done | `pytest -q`: 84 passed in 803.75s | `078b6a4` | Environment verified (Python 3.11). Dependencies installed. All 84 tests green at baseline. |
-| **Phase 1** | Config validation: Comprehensive boundary & negative audit (Part 6) | Done | `pytest tests/test_config.py -v`: 23/23 passed; full test suite: 92 passed | pending commit | Full dataclass audit complete. Bools rejected for numeric types. Added InitialSignalConfig.mode. Unified runner AppConfig validation. |
-| **Phase 2** | Initial-signal semantics & missing-bearing likelihood (Part 1) | Not Started | — | — | Explicit mode schema (configured vs generated), sensor likelihood fix. |
+| **Phase 1** | Config validation: Comprehensive boundary & negative audit (Part 6) | Done | `pytest tests/test_config.py -v`: 23/23 passed; full test suite: 92 passed | `498240c` | Full dataclass audit complete. Bools rejected for numeric types. Added InitialSignalConfig.mode. Unified runner AppConfig validation. |
+| **Phase 2** | Initial-signal semantics & missing-bearing likelihood (Part 1) | Done | `pytest tests/test_initial_signal.py -v`: 5/5 passed; full test suite: 97 passed | Pending | Added missing_bearing_reason, fixed strength-only/bearing-only/co-located/dropout likelihoods, integrated generated initial signal mode. |
 | **Phase 3** | Mobile-target timing & diffusion prediction (Part 7) | Not Started | — | — | Correct transition timing ($t$ vs $t+1$), replace drift_sigma switch. |
 | **Phase 4** | Evidence and information-gain accounting (Part 2) | Not Started | — | — | Per-update ledger, remove 0.5-bit placeholder, unbiased EIG averaging. |
 | **Phase 5** | Area-scan memory (Part 3) | Not Started | — | — | Post-execution mask update, unified legal radius range with costs. |

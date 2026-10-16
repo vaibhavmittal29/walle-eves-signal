@@ -49,19 +49,34 @@ def sample_signal(
             s_obs = float(np.clip(mu_decoy + s_noise, 0.0, 1.0))
 
             if d_decoy < 1e-6:
-                return SignalReading(strength=s_obs, bearing_deg=None, dropout=False)
+                return SignalReading(
+                    strength=s_obs,
+                    bearing_deg=None,
+                    dropout=False,
+                    missing_bearing_reason="co_located",
+                )
 
             sigma_theta = (
                 sensor.bearing_sigma_base_deg + sensor.bearing_sigma_per_cell_deg * d_decoy
             ) * sensor.noise_scale
             b_noise = rng.normal(0.0, sigma_theta)
             b_obs = float((bearing(agent_pos, decoy_pos) + b_noise) % 360.0)
-            return SignalReading(strength=s_obs, bearing_deg=b_obs, dropout=False)
+            return SignalReading(
+                strength=s_obs,
+                bearing_deg=b_obs,
+                dropout=False,
+                missing_bearing_reason=None,
+            )
 
     # 2. Check for dropout based on EVE's status
     p_drop = sensor.dropout.get(eve_status, 0.05)
     if rng.random() < p_drop:
-        return SignalReading(strength=None, bearing_deg=None, dropout=True)
+        return SignalReading(
+            strength=None,
+            bearing_deg=None,
+            dropout=True,
+            missing_bearing_reason="dropout",
+        )
 
     # 3. Compute true distance and noise-free strength
     d = distance(agent_pos, eve_pos)
@@ -71,7 +86,12 @@ def sample_signal(
 
     # 4. Bearing calculation
     if d < 1e-6:
-        return SignalReading(strength=s_obs, bearing_deg=None, dropout=False)
+        return SignalReading(
+            strength=s_obs,
+            bearing_deg=None,
+            dropout=False,
+            missing_bearing_reason="co_located",
+        )
 
     sigma_theta = (
         sensor.bearing_sigma_base_deg + sensor.bearing_sigma_per_cell_deg * d
@@ -80,7 +100,12 @@ def sample_signal(
     true_b = bearing(agent_pos, eve_pos)
     b_obs = float((true_b + b_noise) % 360.0)
 
-    return SignalReading(strength=s_obs, bearing_deg=b_obs, dropout=False)
+    return SignalReading(
+        strength=s_obs,
+        bearing_deg=b_obs,
+        dropout=False,
+        missing_bearing_reason=None,
+    )
 
 
 def sample_clue_value(
@@ -225,18 +250,21 @@ def build_signal_likelihood(
 
             for idx in range(3):
                 L[:, :, idx] *= L_b
-        elif not reading.dropout:
-            # Standing directly on target: bearing is undefined (None), but not dropout
+        elif reading.missing_bearing_reason == "co_located":
+            # Co-located: target is at distance 0 (agent_pos).
+            # Evaluate signal strength at d=0 through forward model (already evaluated in step 2 above);
+            # zero out all other cells since d > 0 would have produced a bearing reading.
             ax, ay = agent_pos
-            L_at_target = np.zeros((height, width), dtype=np.float64)
+            mask_co = np.zeros((height, width), dtype=np.float64)
             if 0 <= ax < width and 0 <= ay < height:
-                L_at_target[ay, ax] = 1.0
+                mask_co[ay, ax] = 1.0
             for idx in range(3):
-                L[:, :, idx] *= L_at_target
+                L[:, :, idx] *= mask_co
+        # If bearing is None and reason != "co_located", strength likelihood ONLY is applied across grid.
 
-    # Robust mixture model if assumed_spoof_rate > 0
+    # Robust mixture model if assumed_spoof_rate > 0 (for non-dropout readings)
     eps = prior.assumed_spoof_rate
-    if eps > 0:
+    if eps > 0 and not reading.dropout:
         num_free = (width * height) - len(walls)
         uniform_density = 1.0 / max(1, num_free * 3)
         L = (1.0 - eps) * L + eps * uniform_density

@@ -106,6 +106,7 @@ class SignalReading:
     strength: float | None
     bearing_deg: float | None
     dropout: bool
+    missing_bearing_reason: str | None = None
 
 
 @dataclass(frozen=True)

@@ -75,10 +75,7 @@ def generate_benchmark_config(base_seed: int, index: int) -> AppConfig:
         clues=CluesConfig(count=int(rng.integers(4, 7))),
     )
 
-    init_sig = InitialSignalConfig(
-        bearing_deg=round(float(rng.uniform(0.0, 360.0)), 1),
-        strength=round(float(rng.uniform(0.2, 0.6)), 2),
-    )
+    init_sig = InitialSignalConfig(mode="generated")
 
     resources_cfg = ResourcesConfig(
         battery_capacity=bat_capacity,

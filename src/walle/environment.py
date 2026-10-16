@@ -55,14 +55,7 @@ class Environment:
 
         # Public mission info and initial signal reading at step 0
         pub_info = self._world.public_info()
-        init_sig = pub_info.initial_signal
-        initial_signal_reading: Optional[SignalReading] = None
-        if init_sig.bearing_deg is not None or init_sig.strength is not None:
-            initial_signal_reading = SignalReading(
-                strength=init_sig.strength,
-                bearing_deg=init_sig.bearing_deg,
-                dropout=False,
-            )
+        initial_signal_reading = self._world.initial_signal_reading()
 
         initial_obs = Observation(
             step=0,
