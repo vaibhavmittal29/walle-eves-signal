@@ -201,10 +201,9 @@ class TraceLogger:
         self._txt_file.write(txt_line)
         self._txt_file.flush()
 
-        # 6. Save belief frame every 2 steps or on final declaration
-        if step % 2 == 0 or observation.done:
-            self._belief_frames[f"frame_{step}"] = loc_marg.copy()
-            self._frame_steps.append(step)
+        # 6. Save belief frame for every simulation step
+        self._belief_frames[f"frame_{step}"] = loc_marg.copy()
+        self._frame_steps.append(step)
 
     def close(self) -> None:
         """Close log files and write belief_frames.npz."""

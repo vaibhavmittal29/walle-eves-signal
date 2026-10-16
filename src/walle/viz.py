@@ -86,6 +86,7 @@ def render_mission_frame(
     walls: Sequence[Tuple[int, int]],
     chargers: Sequence[Tuple[int, int]],
     grid_size: Tuple[int, int],
+    battery_capacity: int = 100,
     true_location: Optional[Tuple[int, int]] = None,
     true_status: Optional[str] = None,
     is_final_frame: bool = False,
@@ -116,6 +117,11 @@ def render_mission_frame(
     for cx, cy in chargers:
         ax_map.plot(cx + 0.5, cy + 0.5, "D", color="#10b981", markersize=9, markeredgecolor="white", label="Charger" if (cx, cy) == chargers[0] else "")
 
+    # Start Position
+    if records:
+        start_p = records[0]["state_before"]["pos"]
+        ax_map.plot(start_p[0] + 0.5, start_p[1] + 0.5, "s", color="#94a3b8", markersize=7, markeredgecolor="white", label="Start")
+
     # Path up to current step, colored by strategy
     for i in range(step_idx):
         p1 = records[i]["state_before"]["pos"]
@@ -143,7 +149,7 @@ def render_mission_frame(
 
     ax_map.set_xlim(0, w)
     ax_map.set_ylim(h, 0)
-    ax_map.set_title(f"Step {step_idx + 1}/{total_steps} | Strategy: {strat}\nAgent Pos: {pos} | MAP: ({map_x}, {map_y})", fontsize=10, fontweight="bold")
+    ax_map.set_title(f"Action Step {step_idx + 1}/{total_steps} | Strategy: {strat}\nAgent Pos: {pos} | MAP: ({map_x}, {map_y})", fontsize=10, fontweight="bold")
     ax_map.legend(loc="lower left", fontsize=7, framealpha=0.7)
 
     # -------------------------------------------------------------
@@ -156,9 +162,12 @@ def render_mission_frame(
     ax_res.plot(steps_x, battery_y, color="#10b981", linewidth=2.2, label="Battery")
     ax_res.plot(steps_x, reserve_y, "--", color="#f59e0b", linewidth=1.8, label="Return Reserve")
     ax_res.set_xlim(1, max(2, total_steps))
-    ax_res.set_ylim(0, 105)
-    ax_res.set_xlabel("Mission Step", fontsize=9)
-    ax_res.set_ylabel("Battery Level", fontsize=9)
+    y_min = -max(2.0, 0.02 * battery_capacity)
+    y_max = battery_capacity * 1.05
+    ax_res.set_ylim(y_min, y_max)
+    ax_res.axhline(0, color="#9ca3af", linestyle="-", linewidth=0.8, alpha=0.7)
+    ax_res.set_xlabel("Action Step", fontsize=9)
+    ax_res.set_ylabel(f"Battery (capacity: {battery_capacity})", fontsize=9)
     ax_res.set_title(f"Energy Reserves (Bat: {battery_y[-1]}, Res: {reserve_y[-1]})", fontsize=10, fontweight="bold")
     ax_res.grid(True, linestyle=":", alpha=0.5)
     ax_res.legend(loc="upper right", fontsize=8)
@@ -435,6 +444,7 @@ def render_belief_evolution(
 def render_metrics_dashboard(
     records: List[Dict[str, Any]],
     report_data: Dict[str, Any],
+    battery_capacity: int = 100,
     out_path: Optional[Union[str, Path]] = None,
 ) -> Path:
     """Render 2x2 dashboard: energy vs reserve, entropy vs info gain, confidence, and strategy regimes."""
@@ -456,10 +466,13 @@ def render_metrics_dashboard(
     ax1.plot(steps, batteries, color="#10b981", linewidth=2.4, label="Battery Level")
     ax1.plot(steps, reserves, "--", color="#f59e0b", linewidth=2.0, label="Safe Return Reserve")
     ax1.fill_between(steps, reserves, batteries, color="#10b981", alpha=0.15, label="Safe Operating Margin")
-    ax1.set_xlabel("Mission Step", fontsize=10)
-    ax1.set_ylabel("Battery Capacity (%)", fontsize=10)
+    ax1.set_xlabel("Action Step", fontsize=10)
+    ax1.set_ylabel(f"Battery (units / {battery_capacity})", fontsize=10)
     ax1.set_title("Energy Budget & Invariant Return Reserve", fontsize=11, fontweight="bold")
-    ax1.set_ylim(0, 105)
+    y_min = -max(2.0, 0.02 * battery_capacity)
+    y_max = battery_capacity * 1.05
+    ax1.set_ylim(y_min, y_max)
+    ax1.axhline(0, color="#9ca3af", linestyle="-", linewidth=0.8, alpha=0.7)
     ax1.grid(True, linestyle=":", alpha=0.6)
     ax1.legend(loc="lower left", fontsize=8)
 
@@ -564,6 +577,29 @@ def generate_visuals_from_run(run_dir: Union[str, Path]) -> Tuple[Path, Path]:
             return belief_frames[f"frame_{closest_step}"]
         return np.ones((h, w), dtype=np.float64) / (w * h)
 
+    # Detect battery capacity
+    bat_capacity = 100
+    cfg_file = run_dir / "config.yaml"
+    if cfg_file.exists():
+        try:
+            from walle.config import load_config
+            cfg = load_config(cfg_file)
+            bat_capacity = cfg.resources.battery_capacity
+        except Exception:
+            pass
+    elif "resource_utilization" in report_data and "battery_capacity" in report_data.get("resources", {}):
+        bat_capacity = report_data["resources"]["battery_capacity"]
+    elif "mission_summary" in report_data:
+        cfg_name = report_data["mission_summary"].get("config_name")
+        for cp in [Path(f"configs/{cfg_name}.yaml"), Path(f"configs/{cfg_name}"), Path(f"configs/mission_{cfg_name}.yaml")]:
+            if cp.exists():
+                try:
+                    from walle.config import load_config
+                    bat_capacity = load_config(cp).resources.battery_capacity
+                    break
+                except Exception:
+                    pass
+
     # 1. Render Summary PNG (Final step with true EVE revealed)
     final_marginal = get_belief_marginal(total_steps)
     summary_img = render_mission_frame(
@@ -574,6 +610,7 @@ def generate_visuals_from_run(run_dir: Union[str, Path]) -> Tuple[Path, Path]:
         walls=walls,
         chargers=chargers,
         grid_size=(w, h),
+        battery_capacity=bat_capacity,
         true_location=true_loc,
         true_status=true_st,
         is_final_frame=True,
@@ -599,6 +636,7 @@ def generate_visuals_from_run(run_dir: Union[str, Path]) -> Tuple[Path, Path]:
             walls=walls,
             chargers=chargers,
             grid_size=(w, h),
+            battery_capacity=bat_capacity,
             true_location=true_loc if is_last else None,
             true_status=true_st if is_last else None,
             is_final_frame=is_last,
@@ -651,6 +689,7 @@ def generate_visuals_from_run(run_dir: Union[str, Path]) -> Tuple[Path, Path]:
     render_metrics_dashboard(
         records=records,
         report_data=report_data,
+        battery_capacity=bat_capacity,
         out_path=run_dir / "metrics_dashboard.png",
     )
 

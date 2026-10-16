@@ -160,3 +160,11 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Declaration Grounding**: Ensures final step `DECLARE` coordinates and operational status strictly match `report.json["final_answer"]`.
 - **CLI Subcommand**: Added `walle verify <trace_dir>` to `cli.py`, returning exit code 0 on verified clean traces and non-zero exit codes with explicit failure diagnostics upon detecting corruption or tampering.
 - **Self-Contained Run Artifacts**: Configured `runner.py` to serialize `config.yaml` into mission output folders alongside trace logs.
+
+## Remediation Phase 10: Visualization Correctness & Disclosure Boundaries
+- **Config-Driven Battery Capacity Axis**: Removed fixed `ylim(0, 105)`. Energy reserve panels in summary charts, GIF frames, and metrics dashboards dynamically set upper limits to `battery_capacity * 1.05` based on `cfg.resources.battery_capacity`.
+- **Zero-Line Visibility**: Placed lower y-axis limits at `-max(2.0, 0.02 * battery_capacity)` with an explicit `axhline(0)` baseline to prevent the return reserve curve or 0-battery lines from obscuring the true physical bottom.
+- **Action Step Labeling (1..N)**: Replaced ambiguous frame titles with explicit `"Action Step {step_idx + 1}/{total_steps}"`, preventing confusing 0-indexed or tick-based mismatches in visual presentation.
+- **1:1 Belief Snapshot Synchronization**: Updated `TraceLogger` to capture and compress a belief spatial marginal frame for every single step $1..N$ into `belief_frames.npz`, ensuring exact index alignment with `trace.jsonl`.
+- **Ground Truth Information Boundary**: Enforced that true target location (EVE) and status are strictly hidden in all intermediate visualization frames and rendered exclusively on `is_final_frame=True` (post-mission evaluation).
+- **Start and Scan Landmarks**: Added explicit starting point indicators and per-step scan location markers on the spatial path overlay.
