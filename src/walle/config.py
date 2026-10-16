@@ -316,11 +316,10 @@ def validate_config(cfg: AppConfig) -> None:
 
     # 6. Initial Signal
     sig = cfg.initial_signal
-    if sig.mode not in ("configured", "generated"):
-        raise ConfigError(f"Unknown initial_signal mode '{sig.mode}'. Choose 'configured' or 'generated'.")
-    if sig.mode == "configured":
-        if sig.bearing_deg is None and sig.coordinates is None and sig.strength is None:
-            raise ConfigError("Initial signal must provide at least one of 'bearing_deg', 'coordinates', or 'strength'.")
+    if sig.mode not in ("configured", "generated", "none"):
+        raise ConfigError(f"Unknown initial_signal mode '{sig.mode}'. Choose 'configured', 'generated', or 'none'.")
+    if sig.mode == "configured" and sig.bearing_deg is None and sig.coordinates is None and sig.strength is None:
+        raise ConfigError("Initial signal must provide at least one of bearing_deg, coordinates, or strength.")
     if sig.bearing_deg is not None:
         _validate_float(sig.bearing_deg, "initial_signal.bearing_deg")
         if not (0.0 <= sig.bearing_deg <= 360.0):

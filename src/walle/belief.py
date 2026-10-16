@@ -64,6 +64,8 @@ class Belief:
         self.contradiction_count: int = 0
         self.last_kl_divergence: float = 0.0
         self.last_entropy_reduction: float = 0.0
+        self.last_signal_gain: float = 0.0
+        self.last_clue_gains: Dict[int, float] = {}
 
     @property
     def grid(self) -> np.ndarray:
@@ -288,6 +290,8 @@ def apply_observation(
     """
     total_gain = 0.0
     prior = effective_prior if effective_prior is not None else info.sensor_prior
+    belief.last_signal_gain = 0.0
+    belief.last_clue_gains = {}
 
     # 1. Update from signal reading
     if obs.signal is not None:
@@ -299,7 +303,9 @@ def apply_observation(
             height=info.height,
             walls=info.walls,
         )
-        total_gain += belief.update(L_sig)
+        sig_gain = belief.update(L_sig)
+        belief.last_signal_gain = sig_gain
+        total_gain += sig_gain
 
     # 2. Update from clues (each clue incorporated only once)
     if obs.clues:
@@ -318,6 +324,8 @@ def apply_observation(
                 height=info.height,
                 walls=info.walls,
             )
-            total_gain += belief.update(L_clue)
+            c_gain = belief.update(L_clue)
+            belief.last_clue_gains[clue.clue_id] = c_gain
+            total_gain += c_gain
 
     return total_gain

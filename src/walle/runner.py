@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 import json
@@ -48,6 +48,8 @@ class RunResult:
     status_confidence: float
     clues_found: int
     trace_records: List[Dict[str, Any]]
+    evidence_records: List[Dict[str, Any]] = field(default_factory=list)
+    report_dict: Dict[str, Any] = field(default_factory=dict)
     net_battery_change: int = 0
     battery_consumed_by_actions: int = 0
     recharge_energy_delivered: int = 0
@@ -150,11 +152,21 @@ def run_mission(
 
     # Log initial signal as evidence item #0 if present
     if obs.signal is not None and (obs.signal.strength is not None or obs.signal.bearing_deg is not None):
+        init_gain = 0.0
+        if isinstance(agent, BayesPlannerAgent) and agent._belief is not None:
+            # Actual KL divergence against uniform prior
+            b_curr = agent._belief.grid
+            num_free = (info.width * info.height) - len(info.walls)
+            u_val = 1.0 / max(1, num_free * 3)
+            valid = b_curr > 1e-15
+            init_gain = float(np.sum(b_curr[valid] * np.log2(b_curr[valid] / u_val)))
+            init_gain = max(0.0, init_gain)
+
         evidence_records.append({
             "step": 0,
             "type": "initial_signal",
             "raw_value": f"str={obs.signal.strength}, brg={obs.signal.bearing_deg}°",
-            "info_gain_bits": 0.5,
+            "info_gain_bits": init_gain,
             "status": "trusted",
             "effect": f"Initial prior pointing along bearing {obs.signal.bearing_deg}°",
         })
@@ -225,8 +237,12 @@ def run_mission(
         status_tag = "discounted" if is_susp else "trusted"
 
         if obs.signal is not None:
-            gain = agent._belief.last_kl_divergence if isinstance(agent, BayesPlannerAgent) else 0.0
-            map_est = agent._belief.map_estimate() if isinstance(agent, BayesPlannerAgent) else (0, 0)
+            if isinstance(agent, BayesPlannerAgent) and agent._belief is not None:
+                gain = agent._belief.last_signal_gain
+                map_est = agent._belief.map_estimate()
+            else:
+                gain = 0.0
+                map_est = (0, 0)
             sig_val = (
                 f"str={obs.signal.strength:.3f}, brg={obs.signal.bearing_deg:.1f}°"
                 if obs.signal.strength is not None and obs.signal.bearing_deg is not None
@@ -247,7 +263,10 @@ def run_mission(
 
         if obs.clues:
             for cl in obs.clues:
-                gain = agent._belief.last_kl_divergence if isinstance(agent, BayesPlannerAgent) else 0.0
+                if isinstance(agent, BayesPlannerAgent) and agent._belief is not None:
+                    gain = agent._belief.last_clue_gains.get(cl.clue_id, 0.0)
+                else:
+                    gain = 0.0
                 evidence_records.append({
                     "step": obs.step,
                     "type": f"clue_{cl.type}",
@@ -358,6 +377,7 @@ def run_mission(
         status_confidence=st_conf,
         clues_found=clues_found,
         trace_records=trace_records,
+        evidence_records=evidence_records,
         net_battery_change=net_battery_change,
         battery_consumed_by_actions=battery_consumed_by_actions,
         recharge_energy_delivered=recharge_energy_delivered,
@@ -406,5 +426,10 @@ def run_mission(
         log_path = out_path / "run.log"
         if txt_path.exists():
             log_path.write_text(txt_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+        json_file = out_path / "report.json"
+        if json_file.exists():
+            rep_dict = json.loads(json_file.read_text(encoding="utf-8"))
+            result = replace(result, report_dict=rep_dict)
 
     return result

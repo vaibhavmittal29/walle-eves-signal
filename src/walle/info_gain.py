@@ -48,10 +48,24 @@ def eig_signal(
 ) -> float:
     """Calculate Monte-Carlo Expected Information Gain (EIG) in bits for a SCAN_SIGNAL at position.
 
-    Formula:
-        EIG = H(current) - E_{obs}[ H(posterior) ]
+    Estimates Mutual Information I(X; Y) between hidden target state X = (location, status)
+    and noisy observation Y = (strength, bearing).
+
+    By information theoretic equivalence:
+        I(X; Y) = H(X) - H(X | Y) = E_{Y ~ P(Y)} [ D_KL( P(X|Y) || P(X) ) ]
+
+    Observations Y are sampled from the marginal predictive distribution P(Y) = sum_x P(X=x) P(Y | X=x)
+    by ancestral sampling:
+        1. Draw hypothetical target state X ~ P(X) from current belief.
+        2. Draw hypothetical observation Y ~ P(Y | X) from forward sensor model.
+        3. Compute posterior B_new = normalize(B_old * L(Y)).
+        4. Compute Kullback-Leibler divergence D_KL(B_new || B_old).
+        5. Average D_KL across Monte Carlo samples.
+
+    By Gibbs' / Jensen's inequality:
+        D_KL(B_new || B_old) >= 0 for every valid update,
+    ensuring non-negativity I(X; Y) >= 0 within floating-point tolerance.
     """
-    h_current = belief.entropy()
     flat_probs = belief.grid.ravel()
     total_p = float(np.sum(flat_probs))
     if total_p <= 0:
@@ -62,7 +76,8 @@ def eig_signal(
 
     h_w = info.width
     assumed_sensor = _sensor_config_from_prior(info.sensor_prior)
-    delta_h_list = []
+    b_old = belief.grid
+    kl_list = []
 
     for idx in indices:
         # Unravel index into (y, x, k)
@@ -89,20 +104,23 @@ def eig_signal(
             walls=info.walls,
         )
 
-        post_grid = belief.grid * L
+        post_grid = b_old * L
         post_mass = float(np.sum(post_grid))
         if post_mass > 1e-12:
             post_grid /= post_mass
-            flat_post = post_grid[post_grid > 1e-15]
-            h_post = float(-np.sum(flat_post * np.log2(flat_post)))
-            delta_h_list.append(max(0.0, h_current - h_post))
+            valid = (post_grid > 1e-15) & (b_old > 1e-15)
+            kl = float(np.sum(post_grid[valid] * np.log2(post_grid[valid] / b_old[valid])))
+            kl_list.append(max(0.0, kl))
         else:
-            delta_h_list.append(0.0)
+            kl_list.append(0.0)
 
-    if not delta_h_list:
+    if not kl_list:
         return 0.0
 
-    return float(np.mean(delta_h_list))
+    eig = float(np.mean(kl_list))
+    # Assert non-negativity (I >= 0 by Jensen's inequality) with a tiny tolerance for float jitter
+    assert eig >= -1e-9, f"EIG non-negativity violation: {eig}"
+    return max(0.0, eig)
 
 
 def eig_area(

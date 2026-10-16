@@ -55,10 +55,10 @@ class CostTable:
 @dataclass(frozen=True)
 class InitialSignal:
     """Prior signal observation provided at mission initialization."""
-    bearing_deg: float | None
-    coordinates: tuple[int, int] | None
-    coordinates_sigma: float
-    strength: float | None
+    bearing_deg: float | None = None
+    coordinates: tuple[int, int] | None = None
+    coordinates_sigma: float = 4.0
+    strength: float | None = None
     timestamp: int = 0
 
 

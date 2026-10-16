@@ -107,7 +107,9 @@ class World:
     def _create_initial_signal(self) -> Tuple[InitialSignal, Optional[SignalReading]]:
         """Create initial signal specification and sensor reading based on mode."""
         init_cfg = self._config.initial_signal
-        if init_cfg.mode == "configured":
+        if init_cfg.mode == "none":
+            return InitialSignal(), None
+        elif init_cfg.mode == "configured":
             init_sig = InitialSignal(
                 bearing_deg=init_cfg.bearing_deg,
                 coordinates=init_cfg.coordinates,
