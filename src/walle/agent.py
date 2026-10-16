@@ -94,6 +94,7 @@ class BayesPlannerAgent:
         self._current_plan: List[Action] = []
         self._current_plan_goal: Optional[str] = None
         self._current_plan_utility: float = -999.0
+        self._last_planned_action: Optional[Action] = None
 
         # Precomputed BFS distance maps from each charger
         self._charger_dist_maps: Dict[Tuple[int, int], Dict[Tuple[int, int], int]] = {}
@@ -103,6 +104,11 @@ class BayesPlannerAgent:
         self.last_observation_suspicious: bool = False
         self._pending_confirmation: bool = False
         self._suspicious_readings_count: int = 0
+
+    @property
+    def scanned_area_mask(self) -> Optional[np.ndarray]:
+        """Boolean mask of grid cells covered by successful area scans."""
+        return self._scanned_area_mask
 
     def reset(self, info: PublicMissionInfo) -> None:
         """Initialize the agent with public mission specification."""
@@ -123,6 +129,7 @@ class BayesPlannerAgent:
         self._current_plan.clear()
         self._current_plan_goal = None
         self._current_plan_utility = -999.0
+        self._last_planned_action = None
         self.strategy_change_log.clear()
 
         self.last_observation_suspicious = False
@@ -141,14 +148,38 @@ class BayesPlannerAgent:
         for wx, wy in info.walls:
             self._free_cells_mask[wy, wx] = False
 
-    def observe(self, obs: Observation) -> None:
+    def observe(self, obs: Observation, action: Optional[Action] = None) -> None:
         """Process observation, update belief, evaluate strategies, and track clues."""
         if self._info is None or self._belief is None:
             raise RuntimeError("Agent must be reset with PublicMissionInfo before observing.")
 
+        if action is not None:
+            self._last_planned_action = action
+
+        pos = obs.position
+
+        # Update scanned area memory AFTER action execution, only when the action succeeded
+        if (
+            self._last_planned_action is not None
+            and self._last_planned_action.type == ActionType.SCAN_AREA
+            and obs.action_succeeded
+            and not obs.bumped
+            and self._scanned_area_mask is not None
+        ):
+            r = self._last_planned_action.radius
+            px, py = pos
+            h, w = self._scanned_area_mask.shape
+            x_coords = np.arange(w)
+            y_coords = np.arange(h)
+            xx, yy = np.meshgrid(x_coords, y_coords)
+            dists = np.hypot(xx - px, yy - py)
+            scanned_now = (dists <= float(r)) & (self._free_cells_mask if self._free_cells_mask is not None else True)
+            self._scanned_area_mask |= scanned_now
+
+        self._last_planned_action = None
+
         info = self._info
         belief = self._belief
-        pos = obs.position
         self._pos_history.append(pos)
 
         # 1. Contradiction / decoy check against current MAP hypothesis (only if assumed_spoof_rate > 0)
@@ -328,7 +359,7 @@ class BayesPlannerAgent:
                     f"with confidence {loc_conf:.2f} and status '{best_status}' ({status_conf:.2f})."
                 ),
             )
-            return dec_action, decision
+            return self._finalize_decision(dec_action, decision)
 
         # 5. Handle RECHARGE strategy
         if self._strategy == Strategy.RECHARGE:
@@ -340,7 +371,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning=f"Battery {obs.battery}/{info.battery_capacity}; recharging at station {pos}.",
                 )
-                return recharge_action, decision
+                return self._finalize_decision(recharge_action, decision)
 
         # 6. Handle RETURN strategy
         if self._strategy == Strategy.RETURN:
@@ -357,7 +388,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning=f"Low battery ({obs.battery}); navigating along safe return path to charger {best_charger}.",
                 )
-                return return_action, decision
+                return self._finalize_decision(return_action, decision)
             elif obs.on_charger:
                 recharge_action = Action(type=ActionType.RECHARGE)
                 decision = Decision(
@@ -366,7 +397,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning="Reached charger safely; initiating recharge.",
                 )
-                return recharge_action, decision
+                return self._finalize_decision(recharge_action, decision)
 
         # Check safety of next action in existing plan (A4 Rule a)
         if self._current_plan:
@@ -572,7 +603,7 @@ class BayesPlannerAgent:
                     top_candidates=top_candidates,
                     reasoning=f"No safe search actions available (battery {obs.battery}); returning to charger.",
                 )
-                return return_action, decision
+                return self._finalize_decision(return_action, decision)
             else:
                 recharge_action = Action(type=ActionType.RECHARGE)
                 decision = Decision(
@@ -581,7 +612,7 @@ class BayesPlannerAgent:
                     top_candidates=top_candidates,
                     reasoning="Safety forced return; currently on charger, recharging.",
                 )
-                return recharge_action, decision
+                return self._finalize_decision(recharge_action, decision)
 
         best_u, best_cand, best_plan = safe_candidates[0]
 
@@ -601,7 +632,7 @@ class BayesPlannerAgent:
                     f"reserve {current_res} satisfied ({obs.battery}-{b_cost}={bat_after})."
                 ),
             )
-            return chosen_action, decision
+            return self._finalize_decision(chosen_action, decision)
 
         # Adopt optimal plan (fresh plan or replacement)
         self._current_plan = list(best_plan)
@@ -633,7 +664,12 @@ class BayesPlannerAgent:
             reasoning=reasoning,
         )
 
-        return chosen_action, decision
+        return self._finalize_decision(chosen_action, decision)
+
+    def _finalize_decision(self, action: Action, decision: Decision) -> Tuple[Action, Decision]:
+        """Record the selected action for execution monitoring and return decision."""
+        self._last_planned_action = action
+        return action, decision
 
     def act(self, obs: Observation) -> Tuple[Action, Decision]:
         """Process observation, update belief, evaluate strategies, and select optimal action."""
