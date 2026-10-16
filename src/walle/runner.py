@@ -35,6 +35,7 @@ class RunResult:
     recharges_count: int
     distance_travelled: float
     min_battery_margin: int
+    min_battery_absolute: int
     declared_location: Tuple[int, int]
     declared_status: str
     true_location: Tuple[int, int]
@@ -42,10 +43,10 @@ class RunResult:
     location_error: float
     status_correct: bool
     success: bool  # error <= 2.0 and status_correct
-    credible_hit: bool  # true location inside 90% credible region
-    final_entropy: float
-    location_confidence: float
-    status_confidence: float
+    credible_hit: Optional[bool]  # true location inside 90% credible region (None for baselines)
+    final_entropy: Optional[float]  # final belief entropy in bits (None for baselines)
+    location_confidence: Optional[float]  # mass within 1.5-cell radius (None for baselines)
+    status_confidence: Optional[float]  # probability of declared status (None for baselines)
     clues_found: int
     trace_records: List[Dict[str, Any]]
     evidence_records: List[Dict[str, Any]] = field(default_factory=list)
@@ -148,6 +149,7 @@ def run_mission(
     recharges_count = 0
     recharge_energy_delivered = 0
     min_battery_margin = 999999
+    min_battery_absolute = obs.battery
     declared_x, declared_y = obs.position
     declared_st = "active"
 
@@ -230,8 +232,15 @@ def run_mission(
         distance_travelled += dist_step
         prev_pos = obs.position
 
-        if obs.battery < min_battery_margin:
-            min_battery_margin = obs.battery
+        if obs.battery < min_battery_absolute:
+            min_battery_absolute = obs.battery
+
+        margin_above_reserve = obs.battery - curr_res
+        if obs.position not in info.chargers:
+            if margin_above_reserve < min_battery_margin:
+                min_battery_margin = margin_above_reserve
+        elif min_battery_margin == 999999:
+            min_battery_margin = margin_above_reserve
 
         # Evidence tracking
         is_susp = getattr(agent, "last_observation_suspicious", False)
@@ -282,10 +291,13 @@ def run_mission(
         inv_violations = getattr(agent, "invariant_violations", [])
         had_violation = len(inv_violations) > 0 and inv_violations[-1].get("step") == obs.step
 
+        act_b_cost = cost_of(action, info.costs)[0]
+
         # Compact step record
         step_rec = {
             "step": obs.step,
             "action": action.type.value,
+            "action_battery_cost": act_b_cost,
             "position": obs.position,
             "battery": obs.battery,
             "time_left": obs.time_left,
@@ -345,24 +357,24 @@ def run_mission(
     if outcome == "timeout" and not (err <= 2.0 and st_correct):
         outcome = "forced_declare"
 
-    credible_hit = False
-    final_entropy = 0.0
+    credible_hit = None
+    final_entropy = None
     clues_found = 0
+    loc_conf = None
+    st_conf = None
 
     if isinstance(agent, BayesPlannerAgent) and agent._belief is not None:
         cred_cells = agent._belief.credible_region(mass=0.90)
         credible_hit = (eve_x, eve_y) in cred_cells
         final_entropy = round(agent._belief.entropy(), 3)
         clues_found = agent._clues_found
+        loc_conf = round(agent._belief.mass_within((declared_x, declared_y), radius=1.5), 3)
+        st_conf = round(agent._belief.status_marginal().get(declared_st, 0.0), 3)
 
-    net_battery_change = max(0, initial_battery - obs.battery)
-    battery_consumed_by_actions = net_battery_change + recharge_energy_delivered
+    net_battery_change = initial_battery - obs.battery
+    battery_consumed_by_actions = initial_battery + recharge_energy_delivered - obs.battery
     battery_used = battery_consumed_by_actions
     ticks_used = cfg.resources.time_budget - obs.time_left
-
-    final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
-    loc_conf = round(final_belief.mass_within((declared_x, declared_y), radius=1.5), 3) if final_belief else 0.90
-    st_conf = round(final_belief.status_marginal().get(declared_st, 0.0), 3) if final_belief else 0.90
 
     result = RunResult(
         config_name=cfg.mission.name,
@@ -374,7 +386,8 @@ def run_mission(
         battery_used=battery_used,
         recharges_count=recharges_count,
         distance_travelled=round(distance_travelled, 2),
-        min_battery_margin=min_battery_margin,
+        min_battery_margin=min_battery_margin if min_battery_margin != 999999 else 0,
+        min_battery_absolute=min_battery_absolute,
         declared_location=(declared_x, declared_y),
         declared_status=declared_st,
         true_location=(eve_x, eve_y),

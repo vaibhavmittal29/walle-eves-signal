@@ -34,10 +34,11 @@ def generate_report(
     # Compute credible region bounding box if belief available
     cred_count = 0
     bbox = [0, 0, 0, 0]
-    loc_conf = 0.0
-    status_conf = 0.0
-    sec_mode = (0, 0)
-    sec_mode_prob = 0.0
+    loc_conf = None
+    status_conf = None
+    sec_mode = None
+    sec_mode_prob = None
+    st_probs = None
 
     if belief is not None:
         cred_cells = belief.credible_region(mass=0.90)
@@ -52,24 +53,25 @@ def generate_report(
         st_probs = belief.status_marginal()
         status_conf = round(st_probs.get(result.declared_status, 0.0), 3)
         sec_mode, sec_mode_prob = belief.second_mode(exclude_radius=3.0)
-    else:
-        st_probs = {result.declared_status: 1.0}
-        loc_conf = 0.90
-        status_conf = 0.90
 
     # Rule-generated recommended next step
-    is_confident = loc_conf >= 0.80
     rec_lines = []
-    if is_confident:
-        rec_lines.append(
-            f"**Primary Action:** Dispatch WALL-E directly to target coordinates {result.declared_location}. "
-            f"Target localization confidence is high ({loc_conf:.1%})."
-        )
+    if loc_conf is not None:
+        is_confident = loc_conf >= 0.80
+        if is_confident:
+            rec_lines.append(
+                f"**Primary Action:** Dispatch WALL-E directly to target coordinates {result.declared_location}. "
+                f"Target localization confidence is high ({loc_conf:.1%})."
+            )
+        else:
+            rec_lines.append(
+                f"**Primary Action:** Target localization confidence is moderate ({loc_conf:.1%}). "
+                f"Recommend conducting a confirmatory directional scan. "
+                f"Alternative hypothesis mode exists at {sec_mode} with probability {sec_mode_prob:.1%}."
+            )
     else:
         rec_lines.append(
-            f"**Primary Action:** Target localization confidence is moderate ({loc_conf:.1%}). "
-            f"Recommend conducting a confirmatory directional scan. "
-            f"Alternative hypothesis mode exists at {sec_mode} with probability {sec_mode_prob:.1%}."
+            f"**Primary Action:** Baseline agent declared location {result.declared_location} and status '{result.declared_status}' without modeling a posterior belief distribution."
         )
 
     if result.declared_status in ("low_power", "damaged"):
@@ -116,7 +118,7 @@ def generate_report(
             "credible_region_90": {
                 "cell_count": cred_count,
                 "bounding_box": {"x_min": bbox[0], "y_min": bbox[1], "x_max": bbox[2], "y_max": bbox[3]},
-            },
+            } if cred_count > 0 else None,
         },
         "resource_utilization": {
             "battery_used": result.battery_used,
@@ -126,6 +128,7 @@ def generate_report(
             "recharges_count": result.recharges_count,
             "distance_travelled": result.distance_travelled,
             "min_battery_margin": result.min_battery_margin,
+            "min_battery_absolute": getattr(result, "min_battery_absolute", result.min_battery_margin),
             "time_ticks_used": result.ticks_used,
         },
         "recommended_next_step": recommended_next_step,
@@ -177,6 +180,15 @@ def generate_report(
         except Exception:
             pass
 
+    loc_conf_str = f"{loc_conf:.1%} mass within 1.5-cell radius" if loc_conf is not None else "N/A (baseline does not model posterior)"
+    status_conf_str = f"{status_conf:.1%}" if status_conf is not None else "N/A"
+    st_probs_str = ", ".join(f"`{k}`: {v:.1%}" for k, v in st_probs.items()) if st_probs else "N/A"
+    if cred_count > 0:
+        cred_str = f"- Encompasses **{cred_count} cells**\n  - Spatial Bounding Box: `[{bbox[0]}, {bbox[1]}]` to `[{bbox[2]}, {bbox[3]}]`"
+    else:
+        cred_str = "N/A (baseline does not compute credible regions)"
+    calib_str = calib_statement if belief is not None else "N/A (baseline does not compute credible regions)"
+
     # Markdown Document
     md_content = f"""# WALL-E Mission Report: {result.config_name}
 
@@ -190,13 +202,12 @@ def generate_report(
 
 ## 2. Final Inferred Answer
 - **Inferred Location:** `({result.declared_location[0]}, {result.declared_location[1]})`
-- **Location Confidence:** {loc_conf:.1%} mass within 1.5-cell radius
-- **Inferred Status:** `{result.declared_status}` (Confidence: {status_conf:.1%})
-- **Status Probabilities:** {", ".join(f"`{k}`: {v:.1%}" for k, v in st_probs.items())}
+- **Location Confidence:** {loc_conf_str}
+- **Inferred Status:** `{result.declared_status}` (Confidence: {status_conf_str})
+- **Status Probabilities:** {st_probs_str}
 - **90% Credible Region:**
-  - Encompasses **{cred_count} cells**
-  - Spatial Bounding Box: `[{bbox[0]}, {bbox[1]}]` to `[{bbox[2]}, {bbox[3]}]`
-- **Calibration Note:** {calib_statement}
+  {cred_str}
+- **Calibration Note:** {calib_str}
 
 ---
 
@@ -254,9 +265,11 @@ Total pieces of evidence collected: **{len(evidence_records)}**.
 ---
 
 ## 4. Resource Utilization & Safety Verification
-- **Battery Consumed:** {bat_used} energy units
-- **Recharge Cycles:** {recharges} station dockings
-- **Minimum Energy Margin:** {min_margin} battery units remaining
+- **Battery Consumed by Actions:** {bat_consumed} energy units
+- **Net Battery Change:** {net_bat} energy units (initial - final)
+- **Recharge Energy Delivered:** {recharge_energy} energy units ({recharges} station dockings)
+- **Minimum Absolute Battery:** {min_abs} energy units
+- **Minimum Energy Margin:** {min_margin} battery units above return reserve
 - **Safe-Return Verification:** Verified by pre-execution guard ({violations} invariant violations detected)
 - **Empirical Stranding Rate:** {strand_rate:.1f}% stranded across evaluated mission runs
 - **Total Distance Travelled:** {dist_trav:.1f} cells
@@ -269,9 +282,12 @@ Chronological record of high-level autonomous strategy shifts:
 | Step | From Strategy | To Strategy | Trigger Rationale |
 |---|---|---|---|
 """.format(
-        bat_used=result.battery_used,
-        recharges=result.recharges_count,
+        bat_consumed=getattr(result, "battery_consumed_by_actions", result.battery_used),
+        net_bat=getattr(result, "net_battery_change", result.battery_used),
+        recharge_energy=getattr(result, "recharge_energy_delivered", 0),
+        min_abs=getattr(result, "min_battery_absolute", result.min_battery_margin),
         min_margin=result.min_battery_margin,
+        recharges=result.recharges_count,
         violations=getattr(result, "invariant_violations_count", 0),
         strand_rate=0.0 if result.outcome != "stranded" else 100.0,
         dist_trav=result.distance_travelled,
@@ -283,6 +299,8 @@ Chronological record of high-level autonomous strategy shifts:
             md_content += f"| {st.get('step', '-')} | `{st.get('from', '-')}` | `{st.get('to', '-')}` | {st.get('trigger', '-')} |\n"
     else:
         md_content += "| - | `EXPLORE` | `DECLARE` | Direct search convergence |\n"
+
+    cred_hit_str = ("YES" if result.credible_hit else "NO") if result.credible_hit is not None else "N/A (baseline does not compute credible regions)"
 
     md_content += f"""
 ---
@@ -300,7 +318,7 @@ Chronological record of high-level autonomous strategy shifts:
 - **True Operational Status:** `{result.true_status}`
 - **Localization Error:** **{result.location_error:.2f} cells**
 - **Status Classification Correct:** **{'YES' if result.status_correct else 'NO'}**
-- **Truth Inside 90% Credible Region:** **{'YES' if result.credible_hit else 'NO'}**
+- **Truth Inside 90% Credible Region:** **{cred_hit_str}**
 - **Overall Mission Objective:** **{'SUCCESS' if result.success else 'FAILED'}**
 
 ---

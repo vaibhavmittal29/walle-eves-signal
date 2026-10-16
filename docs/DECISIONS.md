@@ -140,3 +140,14 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Baseline Margins Injected**: Removed hardcoded `(0.10, 3)` safety margins from `RandomAgent` and `GreedyBearingAgent`. Baseline agents now accept and apply `AgentSafety` parameters (`margin_fraction`, `margin_flat`) from `AppConfig`.
 - **Metric & Report Disambiguation**: Updated `RunResult`, `trace_records`, and mission reports to clearly distinguish "verified by pre-execution guard (0 invariant violations)" from "empirical stranding rate (0.0% stranded)".
 - **Modalities Verification**: Enhanced `test_agent_uses_all_action_types_including_recharge()` to assert execution across all 5 core action modalities (`MOVE`, `SCAN_SIGNAL`, `SCAN_AREA`, `RECHARGE`, `DECLARE`).
+
+## Remediation Phase 8: Resource Accounting & Metrics Reconciliation
+- **Exact Energy Conservation Formula**: Reconciled energy balance across all missions: $\text{battery\_consumed\_by\_actions} = \text{battery\_initial} + \text{recharge\_energy\_delivered} - \text{battery\_final}$. This quantity strictly equals the sum of actual per-action battery costs $\sum_{t} \text{cost}(a_t)$ recorded in trace records.
+- **Signed Net Battery Change**: Fixed `net_battery_change = battery_initial - battery_final`. Removed artificial `max(0, ...)` clipping so missions ending with higher stored energy than initial (e.g. starting with low charge and recharging at a station) correctly report a negative net change ($\Delta B < 0$).
+- **Disambiguated Absolute Battery vs. Safety Margin**:
+  - `min_battery_absolute`: Lowest absolute battery level the agent held during the mission ($\ge 0$).
+  - `min_battery_margin`: Lowest battery margin above mandatory return reserve while operating in the field (`obs.battery - return_reserve(pos)` across non-charger positions).
+- **Baseline Nullable Posterior Metrics (Zero Fabricated Confidence)**:
+  - When an agent does not model a Bayesian posterior belief distribution (e.g. `RandomAgent`, `GreedyBearingAgent`), fields `location_confidence`, `status_confidence`, `credible_hit`, and `final_entropy` are set strictly to `None` in `RunResult` and `null` in `report.json`.
+  - In `report.md`, these entries render honestly as `"N/A (baseline does not model posterior)"` and `"N/A (baseline does not compute credible regions)"`.
+  - In `benchmark.py`, baseline rows render `"N/A"` in CSV and summary tables for credible region hit rate and final entropy, and credible hit rates are computed only over valid non-null runs, eliminating fabricated 90% or 0% baselines.

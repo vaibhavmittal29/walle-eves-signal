@@ -175,9 +175,9 @@ def run_benchmark(
                 "recharges_count": res.recharges_count,
                 "min_battery_margin": res.min_battery_margin,
                 "stranded": (res.outcome == "stranded"),
-                "credible_hit": res.credible_hit,
+                "credible_hit": res.credible_hit if res.credible_hit is not None else "N/A",
                 "clues_found": res.clues_found,
-                "final_entropy": round(res.final_entropy, 3),
+                "final_entropy": round(res.final_entropy, 3) if res.final_entropy is not None else "N/A",
             })
 
     elapsed = time.time() - start_time
@@ -192,26 +192,31 @@ def run_benchmark(
             writer.writerows(csv_rows)
 
     # 2. Compute Aggregates
-    stats: Dict[str, Dict[str, float]] = {}
+    stats: Dict[str, Dict[str, Any]] = {}
     for at in agent_types:
         r_list = results[at]
         n = len(r_list)
         successes = sum(1 for r in r_list if r.success)
         stranded = sum(1 for r in r_list if r.outcome == "stranded")
         status_ok = sum(1 for r in r_list if r.status_correct)
-        credible_hits = sum(1 for r in r_list if r.credible_hit)
+        
+        valid_cred = [r for r in r_list if r.credible_hit is not None]
+        cred_hit_rate = (sum(1 for r in valid_cred if r.credible_hit) / len(valid_cred)) if valid_cred else None
+
+        valid_ent = [r.final_entropy for r in r_list if r.final_entropy is not None]
+        mean_ent = float(np.mean(valid_ent)) if valid_ent else None
+
         mean_err = float(np.mean([r.location_error for r in r_list]))
         med_err = float(np.median([r.location_error for r in r_list]))
         mean_bat = float(np.mean([r.battery_used for r in r_list]))
         mean_steps = float(np.mean([r.steps for r in r_list]))
-        mean_ent = float(np.mean([r.final_entropy for r in r_list]))
 
         stats[at] = {
             "success_rate": successes / n,
             "status_accuracy": status_ok / n,
             "mean_location_error": mean_err,
             "median_location_error": med_err,
-            "credible_region_hit_rate": credible_hits / n,
+            "credible_region_hit_rate": cred_hit_rate,
             "mean_battery": mean_bat,
             "mean_recharges": float(np.mean([r.recharges_count for r in r_list])),
             "mean_ticks": float(np.mean([r.ticks_used for r in r_list])),
@@ -242,10 +247,11 @@ def run_benchmark(
     for at in agent_types:
         st = stats[at]
         name = agent_labels[at]
+        cred_display = f"{st['credible_region_hit_rate']:.1%}" if st['credible_region_hit_rate'] is not None else "N/A"
         md_content += (
             f"| **{name}** | **{st['success_rate']:.1%}** | {st['mean_location_error']:.2f} | "
             f"{st['median_location_error']:.2f} | {st['status_accuracy']:.1%} | "
-            f"{st['credible_region_hit_rate']:.1%} | {st['mean_battery']:.1f} | "
+            f"{cred_display} | {st['mean_battery']:.1f} | "
             f"{st['mean_recharges']:.1f} | {st['mean_ticks']:.1f} | **{st['stranded_rate']:.1%}** |\n"
         )
 
