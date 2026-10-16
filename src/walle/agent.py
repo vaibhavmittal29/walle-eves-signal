@@ -103,12 +103,32 @@ class BayesPlannerAgent:
         # Decoy and contradiction tracking
         self.last_observation_suspicious: bool = False
         self._pending_confirmation: bool = False
+        self._confirmation_step: int = 0
         self._suspicious_readings_count: int = 0
+        self._suspicious_hypothesis: Optional[Tuple[int, int]] = None
+        self._suspicious_reading: Optional[SignalReading] = None
+        self._suspicious_origin_pos: Optional[Tuple[int, int]] = None
+        self._confirmed_decoys: List[Dict[str, Any]] = []
 
     @property
     def scanned_area_mask(self) -> Optional[np.ndarray]:
         """Boolean mask of grid cells covered by successful area scans."""
         return self._scanned_area_mask
+
+    @property
+    def pending_confirmation(self) -> bool:
+        """Flag indicating whether a decoy confirmation scan is currently pending."""
+        return self._pending_confirmation
+
+    @property
+    def confirmation_step(self) -> int:
+        """Current number of confirmation attempts made for the pending decoy hypothesis."""
+        return self._confirmation_step
+
+    @property
+    def confirmed_decoys(self) -> List[Dict[str, Any]]:
+        """List of confirmed decoy records that have failed verification."""
+        return list(self._confirmed_decoys)
 
     def reset(self, info: PublicMissionInfo) -> None:
         """Initialize the agent with public mission specification."""
@@ -134,7 +154,12 @@ class BayesPlannerAgent:
 
         self.last_observation_suspicious = False
         self._pending_confirmation = False
+        self._confirmation_step = 0
         self._suspicious_readings_count = 0
+        self._suspicious_hypothesis = None
+        self._suspicious_reading = None
+        self._suspicious_origin_pos = None
+        self._confirmed_decoys.clear()
 
         # Precompute charger distance maps
         self._charger_dist_maps = {
@@ -187,7 +212,8 @@ class BayesPlannerAgent:
         effective_prior = None
 
         if (
-            self._assumed_spoof_rate > 0
+            not self._pending_confirmation
+            and self._assumed_spoof_rate > 0
             and obs.signal is not None
             and obs.step > 0
             and obs.signal.bearing_deg is not None
@@ -207,9 +233,11 @@ class BayesPlannerAgent:
                     if ang_err > max(3.0 * sigma_b, 45.0):
                         is_suspicious = True
                         self._pending_confirmation = True
+                        self._confirmation_step = 0
                         self._suspicious_readings_count += 1
                         self._suspicious_reading = obs.signal
                         self._suspicious_hypothesis = (prev_map_x, prev_map_y)
+                        self._suspicious_origin_pos = pos
 
         self.last_observation_suspicious = is_suspicious
 
@@ -225,7 +253,10 @@ class BayesPlannerAgent:
             self._scan_history.append(pos)
             # Evaluate confirmation evidence under documented rule
             if self._pending_confirmation and self._suspicious_hypothesis is not None:
-                if len(self._scan_history) >= 2 and self._scan_history[-1] != self._scan_history[-2]:
+                # Confirmation requires a NEW reading from a DIFFERENT position. A reading from the same cell CANNOT confirm.
+                if self._suspicious_origin_pos is not None and pos != self._suspicious_origin_pos:
+                    self._confirmation_step += 1
+                    confirmed = False
                     if obs.signal.bearing_deg is not None and not obs.signal.dropout:
                         d_hyp = distance(pos, self._suspicious_hypothesis)
                         exp_b = bearing(pos, self._suspicious_hypothesis)
@@ -234,9 +265,34 @@ class BayesPlannerAgent:
                             info.sensor_prior.bearing_sigma_base_deg
                             + info.sensor_prior.bearing_sigma_per_cell_deg * d_hyp
                         ) * info.sensor_prior.noise_scale
-                        # Confirmed if new reading is consistent with hypothesis OR belief has shifted decisively
-                        if ang_err <= max(3.0 * sigma_b, 45.0) or belief.mass_within(belief.map_estimate(), radius=1.5) >= 0.70:
-                            self._pending_confirmation = False
+                        # Exit Condition 1: second scan from distinct position agrees with hypothesis (within 3 sigma or 45 deg)
+                        if ang_err <= max(3.0 * sigma_b, 45.0):
+                            confirmed = True
+
+                    # Exit Condition 2: mass on an alternative mode (distinct from hypothesis) exceeds threshold (0.70)
+                    map_est = belief.map_estimate()
+                    if not confirmed and distance(map_est, self._suspicious_hypothesis) > 1.5:
+                        if belief.mass_within(map_est, radius=1.5) >= 0.70:
+                            confirmed = True
+
+                    if confirmed:
+                        self._pending_confirmation = False
+                        self._confirmation_step = 0
+                        self._suspicious_hypothesis = None
+                        self._suspicious_origin_pos = None
+                    elif self._confirmation_step >= 3:
+                        # Exit Condition 3: 3 confirmation attempts fail -> flag as confirmed decoy and permanently discount
+                        self._confirmed_decoys.append({
+                            "step": obs.step,
+                            "hypothesis": list(self._suspicious_hypothesis),
+                            "origin_position": list(self._suspicious_origin_pos),
+                            "attempts": self._confirmation_step,
+                            "status": "confirmed_decoy",
+                        })
+                        self._pending_confirmation = False
+                        self._confirmation_step = 0
+                        self._suspicious_hypothesis = None
+                        self._suspicious_origin_pos = None
 
         apply_observation(
             belief=belief,
@@ -342,24 +398,27 @@ class BayesPlannerAgent:
             charger_dist_maps=self._charger_dist_maps,
         )
 
-        # 4. Handle DECLARE strategy
+        # 4. Handle DECLARE strategy (strictly blocked while pending_confirmation is True)
         if self._strategy == Strategy.DECLARE:
-            dec_action = Action(
-                type=ActionType.DECLARE,
-                declare_x=map_x,
-                declare_y=map_y,
-                declare_status=best_status,
-            )
-            decision = Decision(
-                action=dec_action,
-                plan=["DECLARE"],
-                top_candidates=[],
-                reasoning=(
-                    f"Mission complete: target localized at ({map_x}, {map_y}) "
-                    f"with confidence {loc_conf:.2f} and status '{best_status}' ({status_conf:.2f})."
-                ),
-            )
-            return self._finalize_decision(dec_action, decision)
+            if self._pending_confirmation:
+                self._strategy = Strategy.VERIFY
+            else:
+                dec_action = Action(
+                    type=ActionType.DECLARE,
+                    declare_x=map_x,
+                    declare_y=map_y,
+                    declare_status=best_status,
+                )
+                decision = Decision(
+                    action=dec_action,
+                    plan=["DECLARE"],
+                    top_candidates=[],
+                    reasoning=(
+                        f"Mission complete: target localized at ({map_x}, {map_y}) "
+                        f"with confidence {loc_conf:.2f} and status '{best_status}' ({status_conf:.2f})."
+                    ),
+                )
+                return self._finalize_decision(dec_action, decision)
 
         # 5. Handle RECHARGE strategy
         if self._strategy == Strategy.RECHARGE:
@@ -440,7 +499,11 @@ class BayesPlannerAgent:
         scored_candidates: List[Tuple[float, CandidateScore, List[Action]]] = []
 
         # Candidate A: SCAN_SIGNAL at current position
-        if len(self._scan_history) == 0 or self._scan_history[-1] != pos:
+        can_scan_signal = (len(self._scan_history) == 0 or self._scan_history[-1] != pos)
+        if self._pending_confirmation and self._suspicious_origin_pos == pos:
+            can_scan_signal = False  # Confirmation requires a NEW reading from a DIFFERENT position
+
+        if can_scan_signal:
             sig_bat = info.costs.scan_signal.battery
             sig_safe = is_action_safe(
                 current_battery=obs.battery,
@@ -568,6 +631,22 @@ class BayesPlannerAgent:
             utility_numerator = (weights.w_info * eig_vp) + approach_bonus
             utility_denominator = 1.0 + (weights.w_cost * cost_norm_vp)
             u_vp = utility_numerator / utility_denominator
+
+            # Next action MUST be confirmation: plan a viewpoint with angular separation 45..135 deg relative to target
+            if self._pending_confirmation and self._suspicious_hypothesis is not None:
+                if self._suspicious_origin_pos is not None and vp == self._suspicious_origin_pos:
+                    u_vp = -999.0
+                else:
+                    orig = self._suspicious_origin_pos or pos
+                    hyp = self._suspicious_hypothesis
+                    if distance(orig, hyp) > 0 and distance(vp, hyp) > 0:
+                        b_orig = bearing(orig, hyp)
+                        b_vp = bearing(vp, hyp)
+                        ang_sep = abs(wrap_angle(b_vp - b_orig))
+                        if 45.0 <= ang_sep <= 135.0:
+                            u_vp *= 3.0
+                        else:
+                            u_vp *= 0.25
 
             if travel_steps > 0 and self._is_dithering(path_to_vp[1]):
                 u_vp *= 0.50

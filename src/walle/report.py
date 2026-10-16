@@ -20,6 +20,7 @@ def generate_report(
     out_dir: Union[str, Path],
     belief: Optional[Belief] = None,
     info: Optional[Any] = None,
+    confirmed_decoys: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[Path, Path]:
     """Generate comprehensive report.json and report.md in the designated output directory.
 
@@ -138,6 +139,8 @@ def generate_report(
         },
         "evidence_count": len(evidence_records),
         "discounted_evidence_count": len([e for e in evidence_records if e.get("status") == "discounted"]),
+        "confirmed_decoys": confirmed_decoys or [],
+        "discounted_evidence": [e for e in evidence_records if e.get("status") == "discounted"],
         "strategy_transitions_count": len(strategy_history),
     }
 
@@ -219,13 +222,27 @@ Total pieces of evidence collected: **{len(evidence_records)}**.
                 f"`{cev.get('status', 'trusted')}` | {cev.get('effect', '-')} |\n"
             )
 
+    conf_decoys = confirmed_decoys or []
+    if conf_decoys:
+        md_content += "\n### Confirmed Decoys:\n"
+        md_content += "| Hypothesis Location | Detection Step | Confirmation Attempts | Origin Position | Status |\n"
+        md_content += "|---|---|---|---|---|\n"
+        for cd in conf_decoys:
+            md_content += (
+                f"| `{cd.get('hypothesis', '-')}` | {cd.get('step', '-')} | "
+                f"{cd.get('attempts', '-')} | `{cd.get('origin_position', '-')}` | `confirmed_decoy` |\n"
+            )
+
     discounted_ev = [ev for ev in evidence_records if ev.get("status") == "discounted"]
     if discounted_ev:
         md_content += "\n### Discounted / Suspected Decoy Readings:\n"
+        md_content += "| Step | Type | Measured Value | Info Gain (bits) | Status | Rejection / Discount Rationale |\n"
+        md_content += "|---|---|---|---|---|---|\n"
         for dev in discounted_ev:
             md_content += (
-                f"- **Step {dev.get('step', '-')}**: `{dev.get('type', '-')}` (`{dev.get('raw_value', '-')}`) "
-                f"— status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).\n"
+                f"| {dev.get('step', '-')} | `{dev.get('type', '-')}` | `{dev.get('raw_value', '-')}` | "
+                f"**{dev.get('info_gain_bits', 0.0):.3f}** | `{dev.get('status', 'discounted')}` | "
+                f"{dev.get('effect', 'Contradictory bearing >3σ under MAP; scheduled confirmation')} |\n"
             )
 
     md_content += """

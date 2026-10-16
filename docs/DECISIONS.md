@@ -125,3 +125,11 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Redundancy Discounting**: Because `eig_area()` computes unscanned fraction relative to `~_scanned_area_mask`, repeated scans at the same location yield 0.0 additional information bits and are suppressed, promoting exploration of novel regions.
 - **Crafted Selection Regression**: Verified through deterministic test conditions that radius 1 (tight battery / constrained perimeter), radius 2 (medium battery / localized clue cluster), and radius 3 (high battery / expansive open terrain) are each selected by the agent's planner.
 
+## Remediation Phase 6: Decoy Confirmation State Machine & Triangulation
+- **Distinct-Cell Confirmation Invariant**: When an observation deviates by $>3\sigma$ from the current MAP hypothesis and triggers `pending_confirmation`, follow-up confirmation scans require observation from a geographically distinct cell (`pos != _suspicious_origin_pos`). Scans from the identical cell are rejected for hypothesis confirmation to avoid circular self-reinforcement.
+- **Orthogonal Viewpoint Prioritization**: Candidate viewpoints that form an angular baseline separation of $45^\circ \le \Delta\theta \le 135^\circ$ relative to the target hypothesis receive a $2.5\times$ utility boost, ensuring geometrically sound triangulation rather than collinear ambiguity.
+- **3-Attempt Timeout to Confirmed Decoy**: If 3 confirmation attempts from distinct viewpoints fail to corroborate the hypothesis, the suspicious reading is permanently categorized as a `confirmed_decoy`, recorded in `confirmed_decoys`, and discounted from future posterior concentration.
+- **Strict Declaration Blocking**: The agent is explicitly prohibited from declaring a target location (`ActionType.DECLARE`) while `pending_confirmation == True`, ensuring that premature declarations are blocked even if confidence metrics nominally pass static thresholds.
+- **Trace & Report Transparency**: Trace records explicitly log `pending_confirmation` and `confirmation_step`, and mission reports present dedicated tables for confirmed decoys and discounted observations.
+
+

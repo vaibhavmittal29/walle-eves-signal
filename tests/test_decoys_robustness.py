@@ -234,3 +234,132 @@ def test_premature_declaration_blocked_while_pending_confirmation():
     action, decision = agent.act(obs)
     assert action.type != ActionType.DECLARE
 
+
+def test_same_cell_scan_does_not_clear_pending_confirmation():
+    """A follow-up reading taken from the identical cell CANNOT confirm the hypothesis."""
+    cfg = load_config("configs/mission_hard_decoys.yaml")
+    world = World(cfg)
+    info = world.public_info()
+
+    agent = BayesPlannerAgent(seed=456)
+    agent.reset(info)
+
+    agent._belief._grid.fill(0.0)
+    agent._belief._grid[10, 10, 0] = 1.0  # target at (10, 10)
+
+    # Step 1: Contradictory reading at (5, 10) pointing West (270°) instead of East (90°)
+    obs1 = Observation(
+        step=1,
+        position=(5, 10),
+        battery=85,
+        time_left=220,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=270.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs1)
+    assert agent.pending_confirmation is True
+    assert agent._suspicious_origin_pos == (5, 10)
+
+    # Step 2: Second reading taken from the EXACT SAME cell (5, 10) pointing East (90°)
+    obs2 = Observation(
+        step=2,
+        position=(5, 10),
+        battery=83,
+        time_left=218,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=90.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs2)
+    # MUST NOT clear confirmation because scan was performed from the same cell
+    assert agent.pending_confirmation is True
+
+
+def test_three_failed_confirmation_attempts_flag_confirmed_decoy():
+    """Three failed confirmation attempts from distinct cells exit pending_confirmation and flag confirmed decoy."""
+    cfg = load_config("configs/mission_hard_decoys.yaml")
+    world = World(cfg)
+    info = world.public_info()
+
+    agent = BayesPlannerAgent(seed=456)
+    agent.reset(info)
+
+    agent._belief._grid.fill(0.0)
+    agent._belief._grid[10, 10, 0] = 1.0  # target at (10, 10)
+
+    # Trigger suspicious reading at (5, 10)
+    obs1 = Observation(
+        step=1,
+        position=(5, 10),
+        battery=85,
+        time_left=220,
+        action_succeeded=True,
+        bumped=False,
+        on_charger=False,
+        signal=SignalReading(strength=0.8, bearing_deg=270.0, dropout=False),
+        clues=(),
+        done=False,
+        done_reason=None,
+    )
+    agent.act(obs1)
+    assert agent.pending_confirmation is True
+
+    # 3 consecutive non-confirming readings from distinct cells (still disagreeing with hypothesis at (10, 10))
+    distinct_positions = [(6, 11), (7, 12), (8, 13)]
+    for idx, d_pos in enumerate(distinct_positions, start=1):
+        obs_fail = Observation(
+            step=1 + idx,
+            position=d_pos,
+            battery=85 - 2 * idx,
+            time_left=220 - idx,
+            action_succeeded=True,
+            bumped=False,
+            on_charger=False,
+            signal=SignalReading(strength=0.8, bearing_deg=270.0, dropout=False),  # contradictory
+            clues=(),
+            done=False,
+            done_reason=None,
+        )
+        agent.act(obs_fail)
+
+    # After 3 failed attempts, pending_confirmation must be False and confirmed_decoys recorded
+    assert agent.pending_confirmation is False
+    assert len(agent.confirmed_decoys) == 1
+    assert agent.confirmed_decoys[0]["status"] == "confirmed_decoy"
+
+
+def test_trace_and_report_contain_confirmation_state_and_tables(tmp_path: Path):
+    """Verify trace records log pending_confirmation & confirmation_step, and report contains decoy tables."""
+    import json
+    out_dir = tmp_path / "decoy_trace_test"
+    res = run_mission("configs/mission_hard_decoys.yaml", master_seed=42, out_dir=out_dir)
+
+    # 1. Check trace.jsonl records
+    jsonl_path = out_dir / "trace.jsonl"
+    assert jsonl_path.exists()
+    records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for rec in records:
+        assert "pending_confirmation" in rec
+        assert "confirmation_step" in rec
+
+    # 2. Check report.json
+    json_path = out_dir / "report.json"
+    rep_dict = json.loads(json_path.read_text(encoding="utf-8"))
+    assert "confirmed_decoys" in rep_dict
+    assert "discounted_evidence" in rep_dict
+
+    # 3. Check report.md
+    md_path = out_dir / "report.md"
+    md_text = md_path.read_text(encoding="utf-8")
+    assert "Evidence Table" in md_text
+
+

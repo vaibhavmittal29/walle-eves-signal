@@ -66,6 +66,8 @@ class TraceLogger:
         observation: Observation,
         belief: Belief,
         is_suspicious: bool = False,
+        pending_confirmation: bool = False,
+        confirmation_step: int = 0,
     ) -> None:
         """Record a single step into JSONL, human text log, and periodic array frame."""
         # 1. Build observation representation
@@ -164,6 +166,8 @@ class TraceLogger:
             "decision": dec_dict,
             "observation": obs_dict,
             "belief_after": belief_dict,
+            "pending_confirmation": pending_confirmation,
+            "confirmation_step": confirmation_step,
         }
         self._jsonl_file.write(json.dumps(record, default=_json_default) + "\n")
         self._jsonl_file.flush()

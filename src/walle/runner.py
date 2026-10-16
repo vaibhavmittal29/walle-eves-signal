@@ -276,6 +276,9 @@ def run_mission(
                     "effect": f"Direct {cl.type} evidence at {cl.position}",
                 })
 
+        is_pending_conf = getattr(agent, "_pending_confirmation", False)
+        conf_step = getattr(agent, "_confirmation_step", 0)
+
         # Compact step record
         step_rec = {
             "step": obs.step,
@@ -285,6 +288,8 @@ def run_mission(
             "time_left": obs.time_left,
             "bumped": obs.bumped,
             "reasoning": decision.reasoning,
+            "pending_confirmation": is_pending_conf,
+            "confirmation_step": conf_step,
         }
         trace_records.append(step_rec)
 
@@ -301,6 +306,8 @@ def run_mission(
                 observation=obs,
                 belief=belief_ref,
                 is_suspicious=is_susp,
+                pending_confirmation=is_pending_conf,
+                confirmation_step=conf_step,
             )
 
         # Optional Live ASCII rendering
@@ -388,6 +395,7 @@ def run_mission(
         out_path = Path(out_dir)
         strat_history = agent.strategy_change_log if isinstance(agent, BayesPlannerAgent) else []
         final_belief = agent._belief if isinstance(agent, BayesPlannerAgent) else None
+        confirmed_decoys = getattr(agent, "confirmed_decoys", [])
         generate_report(
             result=result,
             evidence_records=evidence_records,
@@ -395,6 +403,7 @@ def run_mission(
             out_dir=out_path,
             belief=final_belief,
             info=info,
+            confirmed_decoys=confirmed_decoys,
         )
 
         # Write predictions.json
