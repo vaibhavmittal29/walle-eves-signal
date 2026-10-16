@@ -235,7 +235,17 @@ def run_mission(
         if obs.battery < min_battery_absolute:
             min_battery_absolute = obs.battery
 
-        margin_above_reserve = obs.battery - curr_res
+        res_after = return_reserve(
+            pos=obs.position,
+            chargers=info.chargers,
+            move_battery_cost=info.costs.move.battery,
+            margin_fraction=cfg.agent.safety.margin_fraction,
+            margin_flat=cfg.agent.safety.margin_flat,
+            walls=info.walls,
+            width=info.width,
+            height=info.height,
+        )
+        margin_above_reserve = obs.battery - res_after
         if obs.position not in info.chargers:
             if margin_above_reserve < min_battery_margin:
                 min_battery_margin = margin_above_reserve

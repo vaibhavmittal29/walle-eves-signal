@@ -80,7 +80,7 @@ def test_fuzz_200_random_configs_never_stranded(tmp_path: Path):
 
         cfg = AppConfig(
             mission=m_cfg,
-            initial_signal=InitialSignalConfig(bearing_deg=None, coordinates=None, strength=None),
+            initial_signal=InitialSignalConfig(mode="none", bearing_deg=None, coordinates=None, strength=None),
             resources=res_cfg,
             sensor=SensorConfig(noise_scale=1.0),
             agent=ag_cfg,
