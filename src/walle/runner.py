@@ -53,6 +53,7 @@ class RunResult:
     net_battery_change: int = 0
     battery_consumed_by_actions: int = 0
     recharge_energy_delivered: int = 0
+    invariant_violations_count: int = 0
 
 
 def run_mission(
@@ -115,9 +116,9 @@ def run_mission(
             drift_sigma=0.5 if cfg.mission.eve.mobility == "random_walk" else (cfg.mission.eve.diffusion_sigma if cfg.mission.eve.mobility == "diffusion" else 0.0),
         )
     elif selected_agent_type == "greedy_bearing":
-        agent = GreedyBearingAgent(seed=a_seed)
+        agent = GreedyBearingAgent(seed=a_seed, safety=cfg.agent.safety)
     elif selected_agent_type == "random":
-        agent = RandomAgent(seed=a_seed)
+        agent = RandomAgent(seed=a_seed, safety=cfg.agent.safety)
     else:
         raise ValueError(f"Unknown agent type '{selected_agent_type}'.")
 
@@ -278,6 +279,8 @@ def run_mission(
 
         is_pending_conf = getattr(agent, "_pending_confirmation", False)
         conf_step = getattr(agent, "_confirmation_step", 0)
+        inv_violations = getattr(agent, "invariant_violations", [])
+        had_violation = len(inv_violations) > 0 and inv_violations[-1].get("step") == obs.step
 
         # Compact step record
         step_rec = {
@@ -290,6 +293,7 @@ def run_mission(
             "reasoning": decision.reasoning,
             "pending_confirmation": is_pending_conf,
             "confirmation_step": conf_step,
+            "invariant_violation": had_violation,
         }
         trace_records.append(step_rec)
 
@@ -388,6 +392,7 @@ def run_mission(
         net_battery_change=net_battery_change,
         battery_consumed_by_actions=battery_consumed_by_actions,
         recharge_energy_delivered=recharge_energy_delivered,
+        invariant_violations_count=len(getattr(agent, "invariant_violations", [])),
     )
 
     # Generate markdown, JSON report, predictions.json, and run.log if out_dir specified

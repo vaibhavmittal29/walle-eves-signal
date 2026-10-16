@@ -6,7 +6,8 @@ from collections import deque
 import math
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from walle.actions import Action, ActionType
+from walle.actions import Action, ActionType, MOVE_DELTAS, cost_of
+from walle.observations import CostTable
 
 
 def bfs_distances(
@@ -220,3 +221,92 @@ def is_action_safe(
     )
 
     return battery_after >= reserve_needed
+
+
+def check_action_safety(
+    action: Action,
+    current_pos: Tuple[int, int],
+    current_battery: int,
+    costs: CostTable,
+    chargers: Sequence[Tuple[int, int]],
+    walls: Set[Tuple[int, int]] | frozenset[Tuple[int, int]],
+    width: int,
+    height: int,
+    margin_fraction: float,
+    margin_flat: int,
+    charger_dist_maps: Optional[Dict[Tuple[int, int], Dict[Tuple[int, int], int]]] = None,
+) -> Tuple[bool, Tuple[int, int], int, int]:
+    """Verify safe-return invariant for an action before execution.
+
+    Args:
+        action: The candidate action to execute.
+        current_pos: Current agent grid coordinates (x, y).
+        current_battery: Current agent battery level.
+        costs: Mission cost table.
+        chargers: Sequence of charger coordinates.
+        walls: Set or frozenset of obstacle coordinates.
+        width: Grid width.
+        height: Grid height.
+        margin_fraction: Fractional safety margin on movement.
+        margin_flat: Flat battery reserve buffer.
+        charger_dist_maps: Optional precomputed distance maps from chargers.
+
+    Returns:
+        Tuple of (is_safe, pos_after, battery_after, reserve_needed_at_pos_after).
+    """
+    if action.type == ActionType.DECLARE:
+        res = return_reserve(
+            pos=current_pos,
+            chargers=chargers,
+            move_battery_cost=costs.move.battery,
+            margin_fraction=margin_fraction,
+            margin_flat=margin_flat,
+            walls=walls,
+            width=width,
+            height=height,
+            charger_dist_maps=charger_dist_maps,
+        )
+        return True, current_pos, current_battery, res
+
+    if action.type == ActionType.RECHARGE:
+        res = return_reserve(
+            pos=current_pos,
+            chargers=chargers,
+            move_battery_cost=costs.move.battery,
+            margin_fraction=margin_fraction,
+            margin_flat=margin_flat,
+            walls=walls,
+            width=width,
+            height=height,
+            charger_dist_maps=charger_dist_maps,
+        )
+        if current_pos in chargers:
+            return True, current_pos, current_battery, res
+        return current_battery >= res, current_pos, current_battery, res
+
+    b_cost = cost_of(action, costs)[0]
+    pos_after = current_pos
+    if action.type in MOVE_DELTAS:
+        dx, dy = MOVE_DELTAS[action.type]
+        cand_pos = (current_pos[0] + dx, current_pos[1] + dy)
+        if 0 <= cand_pos[0] < width and 0 <= cand_pos[1] < height and cand_pos not in walls:
+            pos_after = cand_pos
+
+    battery_after = current_battery - b_cost
+    res_after = return_reserve(
+        pos=pos_after,
+        chargers=chargers,
+        move_battery_cost=costs.move.battery,
+        margin_fraction=margin_fraction,
+        margin_flat=margin_flat,
+        walls=walls,
+        width=width,
+        height=height,
+        charger_dist_maps=charger_dist_maps,
+    )
+
+    if battery_after < 0:
+        return False, pos_after, battery_after, res_after
+
+    is_safe = (battery_after >= res_after)
+    return is_safe, pos_after, battery_after, res_after

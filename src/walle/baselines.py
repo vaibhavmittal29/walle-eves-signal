@@ -8,6 +8,7 @@ import numpy as np
 
 from walle.actions import Action, ActionType, MOVE_DELTAS, cost_of
 from walle.agent import CandidateScore, Decision
+from walle.config import AgentSafety
 from walle.geometry import distance, wrap_angle
 from walle.observations import Observation, PublicMissionInfo
 from walle.planner import (
@@ -23,9 +24,10 @@ from walle.planner import (
 class RandomAgent:
     """Baseline agent performing random exploration while adhering to safe-return battery limits."""
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, safety: Optional[AgentSafety] = None):
         self._seed = seed
         self._rng = np.random.default_rng(seed)
+        self._safety = safety if safety is not None else AgentSafety()
         self._info: Optional[PublicMissionInfo] = None
         self._step = 0
         self._last_bearing: Optional[float] = None
@@ -53,7 +55,7 @@ class RandomAgent:
         # Calculate return reserve
         res = return_reserve(
             pos, self._info.chargers, self._info.costs.move.battery,
-            0.10, 3, self._info.walls, self._info.width, self._info.height,
+            self._safety.margin_fraction, self._safety.margin_flat, self._info.walls, self._info.width, self._info.height,
             self._charger_dist_maps,
         )
 
@@ -112,9 +114,10 @@ class RandomAgent:
 class GreedyBearingAgent:
     """Baseline agent following measured bearings greedily towards the target."""
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, safety: Optional[AgentSafety] = None):
         self._seed = seed
         self._rng = np.random.default_rng(seed)
+        self._safety = safety if safety is not None else AgentSafety()
         self._info: Optional[PublicMissionInfo] = None
         self._step = 0
         self._last_bearing: Optional[float] = None
@@ -147,7 +150,7 @@ class GreedyBearingAgent:
         # Safety reserve check
         res = return_reserve(
             pos, self._info.chargers, self._info.costs.move.battery,
-            0.10, 3, self._info.walls, self._info.width, self._info.height,
+            self._safety.margin_fraction, self._safety.margin_flat, self._info.walls, self._info.width, self._info.height,
             self._charger_dist_maps,
         )
 

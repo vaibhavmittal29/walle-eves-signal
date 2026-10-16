@@ -15,6 +15,7 @@ from walle.info_gain import eig_area, eig_signal, generate_candidates
 from walle.observations import Observation, PublicMissionInfo
 from walle.planner import (
     bfs_distances,
+    check_action_safety,
     is_action_safe,
     nearest_charger,
     path_to_move_action,
@@ -109,6 +110,7 @@ class BayesPlannerAgent:
         self._suspicious_reading: Optional[SignalReading] = None
         self._suspicious_origin_pos: Optional[Tuple[int, int]] = None
         self._confirmed_decoys: List[Dict[str, Any]] = []
+        self.invariant_violations: List[Dict[str, Any]] = []
 
     @property
     def scanned_area_mask(self) -> Optional[np.ndarray]:
@@ -160,6 +162,7 @@ class BayesPlannerAgent:
         self._suspicious_reading = None
         self._suspicious_origin_pos = None
         self._confirmed_decoys.clear()
+        self.invariant_violations.clear()
 
         # Precompute charger distance maps
         self._charger_dist_maps = {
@@ -418,7 +421,7 @@ class BayesPlannerAgent:
                         f"with confidence {loc_conf:.2f} and status '{best_status}' ({status_conf:.2f})."
                     ),
                 )
-                return self._finalize_decision(dec_action, decision)
+                return self._finalize_decision(dec_action, decision, obs)
 
         # 5. Handle RECHARGE strategy
         if self._strategy == Strategy.RECHARGE:
@@ -430,7 +433,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning=f"Battery {obs.battery}/{info.battery_capacity}; recharging at station {pos}.",
                 )
-                return self._finalize_decision(recharge_action, decision)
+                return self._finalize_decision(recharge_action, decision, obs)
 
         # 6. Handle RETURN strategy
         if self._strategy == Strategy.RETURN:
@@ -447,7 +450,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning=f"Low battery ({obs.battery}); navigating along safe return path to charger {best_charger}.",
                 )
-                return self._finalize_decision(return_action, decision)
+                return self._finalize_decision(return_action, decision, obs)
             elif obs.on_charger:
                 recharge_action = Action(type=ActionType.RECHARGE)
                 decision = Decision(
@@ -456,7 +459,7 @@ class BayesPlannerAgent:
                     top_candidates=[],
                     reasoning="Reached charger safely; initiating recharge.",
                 )
-                return self._finalize_decision(recharge_action, decision)
+                return self._finalize_decision(recharge_action, decision, obs)
 
         # Check safety of next action in existing plan (A4 Rule a)
         if self._current_plan:
@@ -682,7 +685,7 @@ class BayesPlannerAgent:
                     top_candidates=top_candidates,
                     reasoning=f"No safe search actions available (battery {obs.battery}); returning to charger.",
                 )
-                return self._finalize_decision(return_action, decision)
+                return self._finalize_decision(return_action, decision, obs)
             else:
                 recharge_action = Action(type=ActionType.RECHARGE)
                 decision = Decision(
@@ -691,7 +694,7 @@ class BayesPlannerAgent:
                     top_candidates=top_candidates,
                     reasoning="Safety forced return; currently on charger, recharging.",
                 )
-                return self._finalize_decision(recharge_action, decision)
+                return self._finalize_decision(recharge_action, decision, obs)
 
         best_u, best_cand, best_plan = safe_candidates[0]
 
@@ -711,7 +714,7 @@ class BayesPlannerAgent:
                     f"reserve {current_res} satisfied ({obs.battery}-{b_cost}={bat_after})."
                 ),
             )
-            return self._finalize_decision(chosen_action, decision)
+            return self._finalize_decision(chosen_action, decision, obs)
 
         # Adopt optimal plan (fresh plan or replacement)
         self._current_plan = list(best_plan)
@@ -743,10 +746,100 @@ class BayesPlannerAgent:
             reasoning=reasoning,
         )
 
-        return self._finalize_decision(chosen_action, decision)
+        return self._finalize_decision(chosen_action, decision, obs)
 
-    def _finalize_decision(self, action: Action, decision: Decision) -> Tuple[Action, Decision]:
-        """Record the selected action for execution monitoring and return decision."""
+    def _finalize_decision(
+        self, action: Action, decision: Decision, obs: Observation
+    ) -> Tuple[Action, Decision]:
+        """Record the selected action for execution monitoring and return decision.
+
+        Pre-execution guard:
+            Verifies that the nonterminal action satisfies battery_after >= return_reserve(pos_after).
+            If violated, substitutes a verified safe fallback action (RETURN or RECHARGE).
+            The fallback action is also validated through the same safety guard.
+            If the agent's current state was already unsafe, an honest invariant violation is logged.
+        """
+        info = self._info
+        is_safe, pos_after, bat_after, res_after = check_action_safety(
+            action=action,
+            current_pos=obs.position,
+            current_battery=obs.battery,
+            costs=info.costs,
+            chargers=info.chargers,
+            walls=info.walls,
+            width=info.width,
+            height=info.height,
+            margin_fraction=self._safety.margin_fraction,
+            margin_flat=self._safety.margin_flat,
+            charger_dist_maps=self._charger_dist_maps,
+        )
+
+        if not is_safe:
+            # Action violates return reserve; clear active plan and substitute safe fallback
+            self._current_plan.clear()
+            if obs.on_charger:
+                self._strategy = Strategy.RECHARGE
+                fallback_act = Action(type=ActionType.RECHARGE)
+                fallback_plan = ["RECHARGE"]
+                reasoning = (
+                    f"[SAFETY GUARD] Action {action.type.value} rejected (bat_after {bat_after} < "
+                    f"reserve {res_after}). Recharging on station."
+                )
+            else:
+                self._strategy = Strategy.RETURN
+                best_c, _ = nearest_charger(
+                    obs.position, info.chargers, info.walls, info.width, info.height, self._charger_dist_maps
+                )
+                path = shortest_path(obs.position, best_c, info.walls, info.width, info.height)
+                if len(path) > 1:
+                    fallback_act = path_to_move_action(obs.position, path[1])
+                    fallback_plan = ["RETURN"]
+                    reasoning = (
+                        f"[SAFETY GUARD] Action {action.type.value} rejected (bat_after {bat_after} < "
+                        f"reserve {res_after}). Returning to nearest charger {best_c}."
+                    )
+                else:
+                    self._strategy = Strategy.RECHARGE
+                    fallback_act = Action(type=ActionType.RECHARGE)
+                    fallback_plan = ["RECHARGE"]
+                    reasoning = (
+                        f"[SAFETY GUARD] Action {action.type.value} rejected; at charger {best_c}, recharging."
+                    )
+
+            # Fallback must go through the same guard
+            fb_safe, fb_pos_after, fb_bat_after, fb_res_after = check_action_safety(
+                action=fallback_act,
+                current_pos=obs.position,
+                current_battery=obs.battery,
+                costs=info.costs,
+                chargers=info.chargers,
+                walls=info.walls,
+                width=info.width,
+                height=info.height,
+                margin_fraction=self._safety.margin_fraction,
+                margin_flat=self._safety.margin_flat,
+                charger_dist_maps=self._charger_dist_maps,
+            )
+            if not fb_safe:
+                # Agent was already in an unsafe state! Record honest invariant violation.
+                self.invariant_violations.append({
+                    "step": obs.step,
+                    "position": obs.position,
+                    "battery": obs.battery,
+                    "action_attempted": action.type.value,
+                    "fallback_action": fallback_act.type.value,
+                    "battery_after": fb_bat_after,
+                    "reserve_needed": fb_res_after,
+                })
+
+            action = fallback_act
+            decision = Decision(
+                action=action,
+                plan=fallback_plan,
+                top_candidates=decision.top_candidates,
+                reasoning=reasoning,
+            )
+
         self._last_planned_action = action
         return action, decision
 
