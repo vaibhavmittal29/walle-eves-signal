@@ -4,8 +4,8 @@
     "seed": 42,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 20,
-    "ticks_used": 20
+    "total_steps": 15,
+    "ticks_used": 15
   },
   "environment": {
     "grid_size": [
@@ -55,50 +55,58 @@
   },
   "final_answer": {
     "inferred_location": [
-      6,
+      7,
       11
     ],
     "inferred_status": "active",
     "status_probabilities": {
-      "active": 0.9999999999999999,
-      "low_power": 8.064673656555194e-21,
-      "damaged": 2.0241084233945665e-64
+      "active": 0.9998460223612476,
+      "low_power": 0.00015397763875256995,
+      "damaged": 6.666173641173647e-20
     },
-    "location_confidence": 1.0,
+    "location_confidence": 0.993,
     "status_confidence": 1.0,
     "credible_region_90": {
-      "cell_count": 1,
+      "cell_count": 3,
       "bounding_box": {
-        "x_min": 6,
-        "y_min": 11,
-        "x_max": 6,
+        "x_min": 7,
+        "y_min": 10,
+        "x_max": 8,
         "y_max": 11
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 21,
-    "net_battery_change": 21,
-    "battery_consumed_by_actions": 21,
+    "battery_used": 15,
+    "net_battery_change": 15,
+    "battery_consumed_by_actions": 15,
     "recharge_energy_delivered": 0,
     "recharges_count": 0,
-    "distance_travelled": 17.0,
-    "min_battery_margin": 79,
-    "time_ticks_used": 20
+    "distance_travelled": 13.0,
+    "min_battery_margin": 67,
+    "min_battery_absolute": 85,
+    "time_ticks_used": 15
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (6, 11). Target localization confidence is high (100.0%).\n\n**Standard Protocol:** EVE status is inferred as 'active'. Proceed with standard direct wireless rendezvous and handshake protocol.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (7, 11). Target localization confidence is high (99.3%).\n\n**Standard Protocol:** EVE status is inferred as 'active'. Proceed with standard direct wireless rendezvous and handshake protocol.",
   "ground_truth_check": {
     "true_location": [
       6,
       11
     ],
     "true_status": "active",
-    "location_error_cells": 0.0,
+    "location_error_cells": 1.0,
     "status_correct": true,
     "success": true,
-    "credible_region_hit": true
+    "credible_region_hit": false
   },
-  "evidence_count": 3,
+  "safety_verification": {
+    "guard_status": "verified_by_guard",
+    "invariant_violations_count": 0,
+    "observed_stranding_rate": 0.0
+  },
+  "evidence_count": 2,
   "discounted_evidence_count": 0,
+  "confirmed_decoys": [],
+  "discounted_evidence": [],
   "strategy_transitions_count": 3
 }

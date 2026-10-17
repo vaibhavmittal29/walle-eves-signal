@@ -4,49 +4,53 @@
 - **Configuration:** `mission_hard_decoys` (Master Seed: `99`)
 - **Agent Architecture:** `bayes_planner` (Exact Bayesian Grid Filter + EIG Planner)
 - **Outcome:** **DECLARED**
-- **Duration:** 122 action steps (127 environment ticks)
+- **Duration:** 146 action steps (151 environment ticks)
 
 ---
 
 ## 2. Final Inferred Answer
-- **Inferred Location:** `(19, 6)`
-- **Location Confidence:** 100.0% mass within 1.5-cell radius
-- **Inferred Status:** `low_power` (Confidence: 100.0%)
-- **Status Probabilities:** `active`: 0.0%, `low_power`: 100.0%, `damaged`: 0.0%
+- **Inferred Location:** `(19, 5)`
+- **Location Confidence:** 98.0% mass within 1.5-cell radius
+- **Inferred Status:** `low_power` (Confidence: 99.9%)
+- **Status Probabilities:** `active`: 0.1%, `low_power`: 99.9%, `damaged`: 0.0%
 - **90% Credible Region:**
-  - Encompasses **1 cells**
-  - Spatial Bounding Box: `[19, 6]` to `[19, 6]`
+  - Encompasses **2 cells**
+  - Spatial Bounding Box: `[19, 4]` to `[19, 5]`
 - **Calibration Note:** Empirically calibrated: 90% credible regions achieve 93.0% empirical coverage across 200 randomized missions.
 
 ---
 
 ## 3. Evidence Table
-Total pieces of evidence collected: **21**.
+Total pieces of evidence collected: **22**.
 
 ### Top Most Influential Observations:
 | Rank | Step | Type | Measured Value | Info Gain (bits) | Status | Impact on Belief |
 |---|---|---|---|---|---|---|
-| 1 | 79 | `scan_signal` | `str=0.238, brg=9.9°` | **2.229** | `trusted` | Updated MAP to (18, 12), entropy=6.30b |
-| 2 | 110 | `scan_signal` | `str=0.404, brg=65.1°` | **2.129** | `trusted` | Updated MAP to (19, 9), entropy=3.18b |
-| 3 | 14 | `scan_signal` | `str=0.189, brg=222.8°` | **2.022** | `trusted` | Updated MAP to (0, 14), entropy=8.43b |
-| 4 | 28 | `scan_signal` | `str=0.104, brg=51.1°` | **1.691** | `trusted` | Updated MAP to (7, 10), entropy=8.93b |
-| 5 | 47 | `scan_signal` | `str=0.053, brg=132.4°` | **1.383** | `trusted` | Updated MAP to (19, 17), entropy=8.06b |
+| 1 | 120 | `scan_signal` | `str=0.523, brg=65.8°` | **3.015** | `trusted` | Updated MAP to (19, 6), entropy=3.79b |
+| 2 | 123 | `scan_signal` | `str=0.032, brg=236.0°` | **2.310** | `trusted` | Updated MAP to (19, 6), entropy=6.83b |
+| 3 | 131 | `scan_signal` | `str=0.416, brg=68.7°` | **2.236** | `trusted` | Updated MAP to (19, 7), entropy=2.48b |
+| 4 | 72 | `scan_signal` | `str=0.281, brg=239.2°` | **2.214** | `trusted` | Updated MAP to (12, 19), entropy=6.14b |
+| 5 | 14 | `scan_signal` | `str=0.141, brg=230.9°` | **1.860** | `trusted` | Updated MAP to (0, 13), entropy=8.49b |
 
 ### Discounted / Suspected Decoy Readings:
-- **Step 99**: `scan_signal` (`str=0.400, brg=13.3°`) — status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).
-- **Step 102**: `scan_signal` (`str=1.000, brg=33.0°`) — status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).
-- **Step 104**: `scan_signal` (`str=0.325, brg=59.6°`) — status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).
-- **Step 113**: `scan_signal` (`str=0.049, brg=240.5°`) — status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).
-- **Step 116**: `scan_signal` (`str=0.579, brg=17.1°`) — status: `discounted` (flagged contradictory >3σ under current MAP; scheduled confirmation scan).
+| Step | Type | Measured Value | Info Gain (bits) | Status | Rejection / Discount Rationale |
+|---|---|---|---|---|---|
+| 78 | `scan_signal` | `str=0.149, brg=35.2°` | **0.213** | `discounted` | Discounted suspected decoy (bearing mismatch > 3σ); scheduled confirmation scan |
+| 101 | `scan_signal` | `str=0.455, brg=3.0°` | **0.185** | `discounted` | Discounted suspected decoy (bearing mismatch > 3σ); scheduled confirmation scan |
+| 139 | `scan_signal` | `str=0.611, brg=354.3°` | **1.239** | `discounted` | Discounted suspected decoy (bearing mismatch > 3σ); scheduled confirmation scan |
 
 ---
 
-## 4. Resource Utilization
-- **Battery Consumed:** 136 energy units
-- **Recharge Cycles:** 5 station dockings
-- **Minimum Energy Margin:** 4 battery units remaining (Safe Return guaranteed)
-- **Total Distance Travelled:** 96.0 cells
-- **Time Budget Consumed:** 127 ticks
+## 4. Resource Utilization & Safety Verification
+- **Battery Consumed by Actions:** 161 energy units
+- **Net Battery Change:** 64 energy units (initial - final)
+- **Recharge Energy Delivered:** 97 energy units (5 station dockings)
+- **Minimum Absolute Battery:** 3 energy units
+- **Minimum Energy Margin:** 1 battery units above return reserve
+- **Safe-Return Verification:** Verified by pre-execution guard (0 invariant violations detected)
+- **Empirical Stranding Rate:** 0.0% stranded across evaluated mission runs
+- **Total Distance Travelled:** 119.0 cells
+- **Time Budget Consumed:** 151 ticks
 
 ---
 
@@ -54,17 +58,19 @@ Total pieces of evidence collected: **21**.
 Chronological record of high-level autonomous strategy shifts:
 | Step | From Strategy | To Strategy | Trigger Rationale |
 |---|---|---|---|
-| 79 | `EXPLORE` | `RETURN` | battery 12 near reserve 12 (+ cost 1), initiating RETURN |
-| 87 | `RETURN` | `RECHARGE` | docked at charger with battery 4/100, initiating RECHARGE |
-| 92 | `RECHARGE` | `EXPLORE` | battery replenished (100/100), resuming EXPLORE |
-| 110 | `EXPLORE` | `TRACK` | location confidence 0.66 >= 0.50, switching to TRACK |
-| 118 | `TRACK` | `VERIFY` | location confidence 0.96 >= 0.75, switching to VERIFY |
-| 121 | `VERIFY` | `DECLARE` | location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
+| 86 | `EXPLORE` | `RETURN` | battery 3 near reserve 3 (+ cost 1), initiating RETURN |
+| 87 | `RETURN` | `RECHARGE` | docked at charger with battery 23/100, initiating RECHARGE |
+| 91 | `RECHARGE` | `EXPLORE` | battery replenished (100/100), resuming EXPLORE |
+| 120 | `EXPLORE` | `TRACK` | location confidence 0.73 >= 0.50, switching to TRACK |
+| 123 | `TRACK` | `EXPLORE` | belief collapsed/conflicting evidence (0.16 < 0.30), falling back to EXPLORE |
+| 131 | `EXPLORE` | `TRACK` | location confidence 0.80 >= 0.50, switching to TRACK |
+| 132 | `TRACK` | `VERIFY` | location confidence 0.80 >= 0.75, switching to VERIFY |
+| 145 | `VERIFY` | `DECLARE` | location conf 0.98 >= 0.90 and status conf 1.00 >= 0.70, DECLARING |
 
 ---
 
 ## 6. Recommended Next Step
-**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (100.0%).
+**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (98.0%).
 
 **Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.
 
@@ -76,9 +82,9 @@ Chronological record of high-level autonomous strategy shifts:
 
 - **True EVE Location:** `(19, 5)`
 - **True Operational Status:** `low_power`
-- **Localization Error:** **1.00 cells**
+- **Localization Error:** **0.00 cells**
 - **Status Classification Correct:** **YES**
-- **Truth Inside 90% Credible Region:** **NO**
+- **Truth Inside 90% Credible Region:** **YES**
 - **Overall Mission Objective:** **SUCCESS**
 
 ---

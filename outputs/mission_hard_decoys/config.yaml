@@ -1,0 +1,99 @@
+agent:
+  assumed_spoof_rate: 0.15
+  max_candidates: 30
+  mc_samples: 50
+  safety:
+    margin_flat: 3
+    margin_fraction: 0.1
+  seed: 456
+  thresholds:
+    declare_location: 0.9
+    declare_status: 0.7
+    track: 0.5
+    verify: 0.75
+  type: bayes_planner
+initial_signal:
+  bearing_deg: 120.0
+  coordinates: null
+  coordinates_sigma: 5.0
+  mode: configured
+  strength: 0.25
+  timestamp: 0
+mission:
+  chargers:
+  - - 2
+    - 2
+  - - 15
+    - 9
+  - - 6
+    - 17
+  clues:
+    count: 6
+    explicit: []
+    placement: random
+    type_mix:
+      bearing: 0.5
+      range: 0.3
+      status: 0.2
+  eve:
+    diffusion_sigma: 0.5
+    location: random
+    min_distance_from_start: 9
+    mobility: static
+    status: random
+  grid:
+    height: 20
+    width: 20
+  name: mission_hard_decoys
+  obstacles:
+    ascii: []
+    density: 0.12
+    explicit: []
+    mode: random
+  seed: 99
+  start:
+  - 2
+  - 2
+resources:
+  battery_capacity: 100
+  battery_initial: 100
+  costs:
+    move:
+      battery: 1
+      time: 1
+    recharge:
+      battery_gain: 20
+      time: 2
+    scan_area:
+      battery_base: 2
+      battery_per_radius: 2
+      max_radius: 3
+      time_base: 1
+      time_per_radius: 1
+    scan_signal:
+      battery: 2
+      time: 1
+  time_budget: 300
+sensor:
+  amplitude:
+    active: 1.0
+    damaged: 0.35
+    low_power: 0.6
+  bearing_sigma_base_deg: 10.0
+  bearing_sigma_per_cell_deg: 2.5
+  clue_noise:
+    bearing_sigma_deg: 18.0
+    detect_probability: 0.85
+    false_clue_probability: 0.1
+    range_sigma: 2.5
+    status_accuracy: 0.75
+  d0: 6.0
+  decoys:
+    count: 2
+    spoof_probability: 0.15
+  dropout:
+    active: 0.08
+    damaged: 0.55
+    low_power: 0.3
+  noise_scale: 1.5
+  strength_sigma: 0.06

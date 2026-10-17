@@ -1,45 +1,45 @@
 [step 001 | tick 000 | EXPLORE] POS=[2, 2] BAT=100 RES=03 -> ACTION=MOVE_E
-       REASON: Entropy 8.85 bits; best goal GO_TO@(4, 12)->SCAN gives 3.41 bits (cost 1 bat); reserve 3 satisfied (100-1=99).
+       REASON: Entropy 8.85 bits; best goal GO_TO@(6, 12)->SCAN gives 3.49 bits (cost 1 bat); reserve 3 satisfied (100-1=99).
        OBS:    POS=[3, 2] BAT=099 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
 [step 002 | tick 001 | EXPLORE] POS=[3, 2] BAT=099 RES=05 -> ACTION=MOVE_E
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 5 satisfied (99-1=98).
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 5 satisfied (99-1=98).
        OBS:    POS=[4, 2] BAT=098 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 003 | tick 002 | EXPLORE] POS=[4, 2] BAT=098 RES=06 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 6 satisfied (98-1=97).
-       OBS:    POS=[4, 3] BAT=097 BUMP=False SIG=[None] CLUES=[None]
+[step 003 | tick 002 | EXPLORE] POS=[4, 2] BAT=098 RES=06 -> ACTION=MOVE_E
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 6 satisfied (98-1=97).
+       OBS:    POS=[5, 2] BAT=097 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 004 | tick 003 | EXPLORE] POS=[4, 3] BAT=097 RES=07 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 7 satisfied (97-1=96).
-       OBS:    POS=[4, 4] BAT=096 BUMP=False SIG=[None] CLUES=[None]
+[step 004 | tick 003 | EXPLORE] POS=[5, 2] BAT=097 RES=07 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 7 satisfied (97-1=96).
+       OBS:    POS=[5, 3] BAT=096 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 005 | tick 004 | EXPLORE] POS=[4, 4] BAT=096 RES=08 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 8 satisfied (96-1=95).
-       OBS:    POS=[4, 5] BAT=095 BUMP=False SIG=[None] CLUES=[None]
+[step 005 | tick 004 | EXPLORE] POS=[5, 3] BAT=096 RES=08 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 8 satisfied (96-1=95).
+       OBS:    POS=[5, 4] BAT=095 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 006 | tick 005 | EXPLORE] POS=[4, 5] BAT=095 RES=09 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 9 satisfied (95-1=94).
-       OBS:    POS=[4, 6] BAT=094 BUMP=False SIG=[None] CLUES=[None]
+[step 006 | tick 005 | EXPLORE] POS=[5, 4] BAT=095 RES=09 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 9 satisfied (95-1=94).
+       OBS:    POS=[5, 5] BAT=094 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 007 | tick 006 | EXPLORE] POS=[4, 6] BAT=094 RES=10 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 10 satisfied (94-1=93).
-       OBS:    POS=[4, 7] BAT=093 BUMP=False SIG=[None] CLUES=[None]
+[step 007 | tick 006 | EXPLORE] POS=[5, 5] BAT=094 RES=10 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 10 satisfied (94-1=93).
+       OBS:    POS=[5, 6] BAT=093 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 008 | tick 007 | EXPLORE] POS=[4, 7] BAT=093 RES=11 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 11 satisfied (93-1=92).
-       OBS:    POS=[4, 8] BAT=092 BUMP=False SIG=[None] CLUES=[None]
+[step 008 | tick 007 | EXPLORE] POS=[5, 6] BAT=093 RES=11 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 11 satisfied (93-1=92).
+       OBS:    POS=[5, 7] BAT=092 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 009 | tick 008 | EXPLORE] POS=[4, 8] BAT=092 RES=12 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(4, 12)->SCAN; reserve 12 satisfied (92-1=91).
-       OBS:    POS=[4, 9] BAT=091 BUMP=False SIG=[None] CLUES=[None]
+[step 009 | tick 008 | EXPLORE] POS=[5, 7] BAT=092 RES=12 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 12 satisfied (92-1=91).
+       OBS:    POS=[5, 8] BAT=091 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
-[step 010 | tick 009 | EXPLORE] POS=[4, 9] BAT=091 RES=13 -> ACTION=MOVE_E
-       REASON: Entropy 8.85 bits; best goal GO_TO@(6, 13)->SCAN gives 4.40 bits (cost 1 bat); reserve 13 satisfied (91-1=90).
+[step 010 | tick 009 | EXPLORE] POS=[5, 8] BAT=091 RES=13 -> ACTION=MOVE_S
+       REASON: Executing plan towards GO_TO@(6, 12)->SCAN; reserve 13 satisfied (91-1=90).
        OBS:    POS=[5, 9] BAT=090 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
 [step 011 | tick 010 | EXPLORE] POS=[5, 9] BAT=090 RES=14 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(6, 13)->SCAN; reserve 14 satisfied (90-1=89).
+       REASON: Entropy 8.85 bits; best goal GO_TO@(6, 13)->SCAN gives 4.31 bits (cost 1 bat); reserve 14 satisfied (90-1=89).
        OBS:    POS=[5, 10] BAT=089 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(5,14) P=0.0087 ENTROPY=8.85b CONF=0.07 STATUS={'active': 0.5036, 'low_power': 0.3317, 'damaged': 0.1647}
 [step 012 | tick 011 | EXPLORE] POS=[5, 10] BAT=089 RES=16 -> ACTION=MOVE_E
@@ -62,50 +62,26 @@
        REASON: Executing plan towards GO_TO@(6, 13)->SCAN; reserve 18 satisfied (85-2=83).
        OBS:    POS=[6, 13] BAT=083 BUMP=False SIG=[DROPOUT] CLUES=[None]
        BELIEF: MAP=(4,10) P=0.0135 ENTROPY=8.65b CONF=0.12 STATUS={'active': 0.1322, 'low_power': 0.4354, 'damaged': 0.4324}
-[step 017 | tick 016 | EXPLORE] POS=[6, 13] BAT=083 RES=18 -> ACTION=MOVE_N
-       REASON: Entropy 8.65 bits; best goal GO_TO@(5, 11)->SCAN gives 3.29 bits (cost 1 bat); reserve 18 satisfied (83-1=82).
-       OBS:    POS=[6, 12] BAT=082 BUMP=False SIG=[None] CLUES=[None]
+[step 017 | tick 016 | EXPLORE] POS=[6, 13] BAT=083 RES=18 -> ACTION=MOVE_W
+       REASON: Entropy 8.65 bits; best goal GO_TO@(5, 13)->SCAN gives 3.22 bits (cost 1 bat); reserve 18 satisfied (83-1=82).
+       OBS:    POS=[5, 13] BAT=082 BUMP=False SIG=[None] CLUES=[None]
        BELIEF: MAP=(4,10) P=0.0135 ENTROPY=8.65b CONF=0.12 STATUS={'active': 0.1322, 'low_power': 0.4354, 'damaged': 0.4324}
-[step 018 | tick 017 | EXPLORE] POS=[6, 12] BAT=082 RES=17 -> ACTION=MOVE_N
-       REASON: Executing plan towards GO_TO@(5, 11)->SCAN; reserve 17 satisfied (82-1=81).
-       OBS:    POS=[6, 11] BAT=081 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,10) P=0.0135 ENTROPY=8.65b CONF=0.12 STATUS={'active': 0.1322, 'low_power': 0.4354, 'damaged': 0.4324}
-[step 019 | tick 018 | EXPLORE] POS=[6, 11] BAT=081 RES=18 -> ACTION=MOVE_W
-       REASON: Executing plan towards GO_TO@(5, 11)->SCAN; reserve 18 satisfied (81-1=80).
-       OBS:    POS=[5, 11] BAT=080 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,10) P=0.0135 ENTROPY=8.65b CONF=0.12 STATUS={'active': 0.1322, 'low_power': 0.4354, 'damaged': 0.4324}
-[EVENT | tick 019] Strategy changed from EXPLORE to TRACK: location confidence 0.69 >= 0.50, switching to TRACK
-[step 020 | tick 019 | EXPLORE] POS=[5, 11] BAT=080 RES=17 -> ACTION=SCAN_SIGNAL
-       REASON: Executing plan towards GO_TO@(5, 11)->SCAN; reserve 17 satisfied (80-2=78).
-       OBS:    POS=[5, 11] BAT=078 BUMP=False SIG=[STR=0.575 BRG=233.8°] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.3804 ENTROPY=3.12b CONF=0.69 STATUS={'active': 0.2837, 'low_power': 0.7163, 'damaged': 0.0}
-[step 021 | tick 020 | TRACK  ] POS=[5, 11] BAT=078 RES=17 -> ACTION=MOVE_S
-       REASON: Entropy 3.12 bits; best goal GO_TO@(3, 13)->SCAN gives 2.05 bits (cost 1 bat); reserve 17 satisfied (78-1=77).
-       OBS:    POS=[5, 12] BAT=077 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.3804 ENTROPY=3.12b CONF=0.69 STATUS={'active': 0.2837, 'low_power': 0.7163, 'damaged': 0.0}
-[step 022 | tick 021 | TRACK  ] POS=[5, 12] BAT=077 RES=18 -> ACTION=MOVE_S
-       REASON: Executing plan towards GO_TO@(3, 13)->SCAN; reserve 18 satisfied (77-1=76).
-       OBS:    POS=[5, 13] BAT=076 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.3804 ENTROPY=3.12b CONF=0.69 STATUS={'active': 0.2837, 'low_power': 0.7163, 'damaged': 0.0}
-[step 023 | tick 022 | TRACK  ] POS=[5, 13] BAT=076 RES=19 -> ACTION=MOVE_W
-       REASON: Executing plan towards GO_TO@(3, 13)->SCAN; reserve 19 satisfied (76-1=75).
-       OBS:    POS=[4, 13] BAT=075 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.3804 ENTROPY=3.12b CONF=0.69 STATUS={'active': 0.2837, 'low_power': 0.7163, 'damaged': 0.0}
-[step 024 | tick 023 | TRACK  ] POS=[4, 13] BAT=075 RES=18 -> ACTION=MOVE_W
-       REASON: Executing plan towards GO_TO@(3, 13)->SCAN; reserve 18 satisfied (75-1=74).
-       OBS:    POS=[3, 13] BAT=074 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.3804 ENTROPY=3.12b CONF=0.69 STATUS={'active': 0.2837, 'low_power': 0.7163, 'damaged': 0.0}
-[EVENT | tick 024] Strategy changed from TRACK to VERIFY: location confidence 1.00 >= 0.75, switching to VERIFY
-[step 025 | tick 024 | TRACK  ] POS=[3, 13] BAT=074 RES=17 -> ACTION=SCAN_SIGNAL
-       REASON: Executing plan towards GO_TO@(3, 13)->SCAN; reserve 17 satisfied (74-2=72).
-       OBS:    POS=[3, 13] BAT=072 BUMP=False SIG=[STR=0.581 BRG=31.0°] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
-[EVENT | tick 025] Strategy changed from VERIFY to DECLARE: location conf 1.00 >= 0.90 and status conf 1.00 >= 0.70, DECLARING
-[step 026 | tick 025 | VERIFY ] POS=[3, 13] BAT=072 RES=17 -> ACTION=MOVE_N
-       REASON: Entropy 0.12 bits; best goal GO_TO@(3, 12)->SCAN gives 0.10 bits (cost 1 bat); reserve 17 satisfied (72-1=71).
-       OBS:    POS=[3, 12] BAT=071 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
-[step 027 | tick 026 | DECLARE] POS=[3, 12] BAT=071 RES=16 -> ACTION=DECLARE
-       REASON: Mission complete: target localized at (4, 12) with confidence 1.00 and status 'low_power' (1.00).
-       OBS:    POS=[3, 12] BAT=071 BUMP=False SIG=[None] CLUES=[None]
-       BELIEF: MAP=(4,12) P=0.9854 ENTROPY=0.12b CONF=1.00 STATUS={'active': 0.0, 'low_power': 1.0, 'damaged': 0.0}
+[EVENT | tick 017] Strategy changed from EXPLORE to TRACK: location confidence 0.96 >= 0.50, switching to TRACK
+[step 018 | tick 017 | EXPLORE] POS=[5, 13] BAT=082 RES=19 -> ACTION=SCAN_SIGNAL
+       REASON: Executing plan towards GO_TO@(5, 13)->SCAN; reserve 19 satisfied (82-2=80).
+       OBS:    POS=[5, 13] BAT=080 BUMP=False SIG=[STR=0.575 BRG=323.8°] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.5121 ENTROPY=1.89b CONF=0.96 STATUS={'active': 0.0024, 'low_power': 0.9976, 'damaged': 0.0}
+[EVENT | tick 018] Strategy changed from TRACK to VERIFY: location confidence 0.96 >= 0.75, switching to VERIFY
+[step 019 | tick 018 | TRACK  ] POS=[5, 13] BAT=080 RES=19 -> ACTION=MOVE_N
+       REASON: Entropy 1.88 bits; best goal GO_TO@(4, 11)->SCAN gives 1.52 bits (cost 1 bat); reserve 19 satisfied (80-1=79).
+       OBS:    POS=[5, 12] BAT=079 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.5121 ENTROPY=1.89b CONF=0.96 STATUS={'active': 0.0024, 'low_power': 0.9976, 'damaged': 0.0}
+[EVENT | tick 019] Strategy changed from VERIFY to DECLARE: location conf 0.96 >= 0.90 and status conf 1.00 >= 0.70, DECLARING
+[step 020 | tick 019 | VERIFY ] POS=[5, 12] BAT=079 RES=18 -> ACTION=MOVE_W
+       REASON: Entropy 1.88 bits; best goal GO_TO@(4, 12)->SCAN gives 1.49 bits (cost 1 bat); reserve 18 satisfied (79-1=78).
+       OBS:    POS=[4, 12] BAT=078 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.5121 ENTROPY=1.89b CONF=0.96 STATUS={'active': 0.0024, 'low_power': 0.9976, 'damaged': 0.0}
+[step 021 | tick 020 | DECLARE] POS=[4, 12] BAT=078 RES=17 -> ACTION=DECLARE
+       REASON: Mission complete: target localized at (4, 12) with confidence 0.96 and status 'low_power' (1.00).
+       OBS:    POS=[4, 12] BAT=078 BUMP=False SIG=[None] CLUES=[None]
+       BELIEF: MAP=(4,12) P=0.5121 ENTROPY=1.89b CONF=0.96 STATUS={'active': 0.0024, 'low_power': 0.9976, 'damaged': 0.0}

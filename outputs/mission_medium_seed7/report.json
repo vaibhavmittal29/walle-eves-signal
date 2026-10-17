@@ -4,8 +4,8 @@
     "seed": 7,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 27,
-    "ticks_used": 27
+    "total_steps": 21,
+    "ticks_used": 21
   },
   "environment": {
     "grid_size": [
@@ -184,33 +184,34 @@
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 2.8879880919737414e-10,
-      "low_power": 0.9999999997046342,
-      "damaged": 6.567261108582089e-12
+      "active": 0.0024447577707836714,
+      "low_power": 0.9975537980106604,
+      "damaged": 1.4442185551253915e-06
     },
-    "location_confidence": 1.0,
-    "status_confidence": 1.0,
+    "location_confidence": 0.957,
+    "status_confidence": 0.998,
     "credible_region_90": {
-      "cell_count": 1,
+      "cell_count": 3,
       "bounding_box": {
-        "x_min": 4,
-        "y_min": 12,
+        "x_min": 3,
+        "y_min": 11,
         "x_max": 4,
         "y_max": 12
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 29,
-    "net_battery_change": 29,
-    "battery_consumed_by_actions": 29,
+    "battery_used": 22,
+    "net_battery_change": 22,
+    "battery_consumed_by_actions": 22,
     "recharge_energy_delivered": 0,
     "recharges_count": 0,
-    "distance_travelled": 23.0,
-    "min_battery_margin": 71,
-    "time_ticks_used": 27
+    "distance_travelled": 18.0,
+    "min_battery_margin": 61,
+    "min_battery_absolute": 78,
+    "time_ticks_used": 21
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (4, 12). Target localization confidence is high (95.7%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       4,
@@ -222,7 +223,14 @@
     "success": true,
     "credible_region_hit": true
   },
-  "evidence_count": 4,
+  "safety_verification": {
+    "guard_status": "verified_by_guard",
+    "invariant_violations_count": 0,
+    "observed_stranding_rate": 0.0
+  },
+  "evidence_count": 3,
   "discounted_evidence_count": 0,
+  "confirmed_decoys": [],
+  "discounted_evidence": [],
   "strategy_transitions_count": 3
 }

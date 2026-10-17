@@ -4,8 +4,8 @@
     "seed": 99,
     "agent_type": "bayes_planner",
     "outcome": "declared",
-    "total_steps": 122,
-    "ticks_used": 127
+    "total_steps": 146,
+    "ticks_used": 151
   },
   "environment": {
     "grid_size": [
@@ -172,49 +172,82 @@
   "final_answer": {
     "inferred_location": [
       19,
-      6
+      5
     ],
     "inferred_status": "low_power",
     "status_probabilities": {
-      "active": 4.076346193293567e-06,
-      "low_power": 0.9999784770151121,
-      "damaged": 1.7446638694667784e-05
+      "active": 0.0011150932889205972,
+      "low_power": 0.9986893417648716,
+      "damaged": 0.00019556494620749402
     },
-    "location_confidence": 1.0,
-    "status_confidence": 1.0,
+    "location_confidence": 0.98,
+    "status_confidence": 0.999,
     "credible_region_90": {
-      "cell_count": 1,
+      "cell_count": 2,
       "bounding_box": {
         "x_min": 19,
-        "y_min": 6,
+        "y_min": 4,
         "x_max": 19,
-        "y_max": 6
+        "y_max": 5
       }
     }
   },
   "resource_utilization": {
-    "battery_used": 136,
-    "net_battery_change": 40,
-    "battery_consumed_by_actions": 136,
-    "recharge_energy_delivered": 96,
+    "battery_used": 161,
+    "net_battery_change": 64,
+    "battery_consumed_by_actions": 161,
+    "recharge_energy_delivered": 97,
     "recharges_count": 5,
-    "distance_travelled": 96.0,
-    "min_battery_margin": 4,
-    "time_ticks_used": 127
+    "distance_travelled": 119.0,
+    "min_battery_margin": 1,
+    "min_battery_absolute": 3,
+    "time_ticks_used": 151
   },
-  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 6). Target localization confidence is high (100.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
+  "recommended_next_step": "**Primary Action:** Dispatch WALL-E directly to target coordinates (19, 5). Target localization confidence is high (98.0%).\n\n**Rescue Precaution:** EVE status is inferred as 'low_power'. Approach equipped with an auxiliary charging payload and hardware repair kit.",
   "ground_truth_check": {
     "true_location": [
       19,
       5
     ],
     "true_status": "low_power",
-    "location_error_cells": 1.0,
+    "location_error_cells": 0.0,
     "status_correct": true,
     "success": true,
-    "credible_region_hit": false
+    "credible_region_hit": true
   },
-  "evidence_count": 21,
-  "discounted_evidence_count": 5,
-  "strategy_transitions_count": 6
+  "safety_verification": {
+    "guard_status": "verified_by_guard",
+    "invariant_violations_count": 0,
+    "observed_stranding_rate": 0.0
+  },
+  "evidence_count": 22,
+  "discounted_evidence_count": 3,
+  "confirmed_decoys": [],
+  "discounted_evidence": [
+    {
+      "step": 78,
+      "type": "scan_signal",
+      "raw_value": "str=0.149, brg=35.2\u00b0",
+      "info_gain_bits": 0.21321961002767836,
+      "status": "discounted",
+      "effect": "Discounted suspected decoy (bearing mismatch > 3\u03c3); scheduled confirmation scan"
+    },
+    {
+      "step": 101,
+      "type": "scan_signal",
+      "raw_value": "str=0.455, brg=3.0\u00b0",
+      "info_gain_bits": 0.18518645606261888,
+      "status": "discounted",
+      "effect": "Discounted suspected decoy (bearing mismatch > 3\u03c3); scheduled confirmation scan"
+    },
+    {
+      "step": 139,
+      "type": "scan_signal",
+      "raw_value": "str=0.611, brg=354.3\u00b0",
+      "info_gain_bits": 1.238864258034653,
+      "status": "discounted",
+      "effect": "Discounted suspected decoy (bearing mismatch > 3\u03c3); scheduled confirmation scan"
+    }
+  ],
+  "strategy_transitions_count": 8
 }
