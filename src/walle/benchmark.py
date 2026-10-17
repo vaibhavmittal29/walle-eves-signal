@@ -465,21 +465,83 @@ def render_status_confusion_matrix(planner_results: List[RunResult], out_path: P
     plt.close(fig)
 
 
+def compute_calibration_bins(
+    planner_results: List[RunResult],
+    bins: Optional[List[Tuple[float, float]]] = None,
+    distance_threshold: float = 1.5,
+) -> List[Dict[str, Any]]:
+    """Compute calibration statistics across declared confidence bins.
+
+    For each bin [low, high), computes:
+    - count: number of valid runs with declared confidence in [low, high)
+    - mean_confidence: empirical average declared confidence of samples in bin
+    - patch_accuracy: empirical fraction with location_error <= distance_threshold
+    - credible_coverage: empirical fraction with credible_hit == True (excluding runs without credible regions)
+    - ci_95_low, ci_95_high: Wilson score 95% confidence interval for patch accuracy
+    """
+    if bins is None:
+        bins = [(0.0, 0.5), (0.5, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 0.95), (0.95, 1.0001)]
+
+    records: List[Dict[str, Any]] = []
+    for low, high in bins:
+        matching = [
+            r for r in planner_results
+            if r.location_confidence is not None and low <= r.location_confidence < high
+        ]
+        n = len(matching)
+        if n == 0:
+            records.append({
+                "low": low,
+                "high": high,
+                "count": 0,
+                "mean_confidence": None,
+                "patch_accuracy": None,
+                "credible_coverage": None,
+                "ci_95_low": None,
+                "ci_95_high": None,
+            })
+            continue
+
+        confs = [r.location_confidence for r in matching]
+        mean_conf = float(np.mean(confs))
+
+        hits_patch = sum(1 for r in matching if r.location_error <= distance_threshold)
+        patch_acc = hits_patch / n
+
+        # Wilson score 95% interval
+        z = 1.96
+        z2 = z * z
+        denom = 1.0 + z2 / n
+        center = (patch_acc + z2 / (2.0 * n)) / denom
+        margin = (z * np.sqrt((patch_acc * (1.0 - patch_acc) / n) + (z2 / (4.0 * n * n)))) / denom
+        ci_low = max(0.0, float(center - margin))
+        ci_high = min(1.0, float(center + margin))
+
+        # Credible coverage: do not count 'no region generated' (credible_hit is None) as a missed region
+        valid_cred = [r for r in matching if r.credible_hit is not None]
+        if valid_cred:
+            cred_cov = sum(1 for r in valid_cred if r.credible_hit) / len(valid_cred)
+        else:
+            cred_cov = None
+
+        records.append({
+            "low": low,
+            "high": high,
+            "count": n,
+            "mean_confidence": mean_conf,
+            "patch_accuracy": patch_acc,
+            "credible_coverage": cred_cov,
+            "ci_95_low": ci_low,
+            "ci_95_high": ci_high,
+        })
+
+    return records
+
+
 def render_calibration_plot(planner_results: List[RunResult], out_path: Path) -> None:
     """Plot reliability diagram (confidence calibration) for location declarations."""
-    bins = [(0.5, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 0.95), (0.95, 1.001)]
-    bin_mids = []
-    bin_accuracies = []
-    bin_counts = []
-
-    for low, high in bins:
-        matching = [r for r in planner_results if low <= r.location_confidence < high]
-        if matching:
-            mid = (low + min(1.0, high)) / 2.0
-            acc = sum(1 for r in matching if r.location_error <= 1.5) / len(matching)
-            bin_mids.append(mid)
-            bin_accuracies.append(acc)
-            bin_counts.append(len(matching))
+    bin_stats = compute_calibration_bins(planner_results)
+    valid_bins = [b for b in bin_stats if b["count"] > 0 and b["mean_confidence"] is not None]
 
     fig, ax = plt.subplots(figsize=(7, 6), dpi=150)
     fig.patch.set_facecolor("#0f172a")
@@ -490,17 +552,59 @@ def render_calibration_plot(planner_results: List[RunResult], out_path: Path) ->
         spine.set_color("#475569")
 
     # Ideal calibration line
-    ax.plot([0.5, 1.0], [0.5, 1.0], "--", color="#94a3b8", linewidth=1.8, label="Perfect Calibration (y = x)")
+    ax.plot([0.0, 1.0], [0.0, 1.0], "--", color="#94a3b8", linewidth=1.8, label="Ideal Calibration (y = x)")
 
-    if bin_mids:
-        ax.plot(bin_mids, bin_accuracies, "o-", color="#10b981", linewidth=2.5, markersize=8, label="Empirical Coverage")
-        for x, y, n in zip(bin_mids, bin_accuracies, bin_counts):
-            ax.annotate(f"N={n}", (x, y), textcoords="offset points", xytext=(0, 10), ha="center", color="#f8fafc", fontsize=9, fontweight="bold")
+    if valid_bins:
+        x_vals = [b["mean_confidence"] for b in valid_bins]
+        y_patch = [b["patch_accuracy"] for b in valid_bins]
+        y_err_low = [b["patch_accuracy"] - b["ci_95_low"] for b in valid_bins]
+        y_err_high = [b["ci_95_high"] - b["patch_accuracy"] for b in valid_bins]
 
-    ax.set_xlim(0.5, 1.02)
-    ax.set_ylim(0.5, 1.02)
-    ax.set_xlabel("Mean Declared Confidence", color="#cbd5e1", fontsize=11)
-    ax.set_ylabel("Empirical Accuracy (Error <= 1.5 cells)", color="#cbd5e1", fontsize=11)
+        ax.errorbar(
+            x_vals,
+            y_patch,
+            yerr=[y_err_low, y_err_high],
+            fmt="o-",
+            color="#10b981",
+            linewidth=2.5,
+            markersize=8,
+            capsize=4,
+            label="Empirical Patch Accuracy (<= 1.5 cells, 95% CI)",
+        )
+
+        valid_cred_bins = [b for b in valid_bins if b["credible_coverage"] is not None]
+        if valid_cred_bins:
+            x_cred = [b["mean_confidence"] for b in valid_cred_bins]
+            y_cred = [b["credible_coverage"] for b in valid_cred_bins]
+            ax.plot(
+                x_cred,
+                y_cred,
+                "s--",
+                color="#38bdf8",
+                linewidth=2.0,
+                markersize=7,
+                label="Empirical Credible Coverage (90%)",
+            )
+
+        for b in valid_bins:
+            x = b["mean_confidence"]
+            y = b["patch_accuracy"]
+            n = b["count"]
+            ax.annotate(
+                f"N={n}",
+                (x, y),
+                textcoords="offset points",
+                xytext=(0, 12),
+                ha="center",
+                color="#f8fafc",
+                fontsize=9,
+                fontweight="bold",
+            )
+
+    ax.set_xlim(0.0, 1.02)
+    ax.set_ylim(0.0, 1.05)
+    ax.set_xlabel("Mean Declared Confidence (Empirical Bin Mean)", color="#cbd5e1", fontsize=11)
+    ax.set_ylabel("Empirical Accuracy / Coverage", color="#cbd5e1", fontsize=11)
     ax.set_title("Reliability Diagram: Location Confidence Calibration", color="#f8fafc", fontsize=12, fontweight="bold", pad=12)
     ax.legend(facecolor="#1e293b", edgecolor="#475569", labelcolor="#f8fafc", loc="upper left", fontsize=9)
     plt.tight_layout()

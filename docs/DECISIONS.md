@@ -179,3 +179,16 @@ This document records all architectural choices, assumptions, and key decisions 
 - **Fuzz Test Mode Hardening**: In `tests/test_robustness_fuzz.py`, explicitly configured `mode="none"` when passing `bearing_deg=None, coordinates=None, strength=None` to satisfy strict Phase 1 configuration schema validation.
 - **Full Test Suite Verification**: Executed the complete test suite including all 200-seed Monte Carlo fuzz tests and safety invariance tests across 136 tests, verifying 100% test pass rate with zero stranding across all randomized configurations.
 
+## Remediation Phase 13: Calibration & Benchmark Methodology
+- **Empirical Bin Means (Zero Midpoints)**: Replaced nominal bin midpoint calculations `(low + high) / 2` in `render_calibration_plot` and `scripts/calibration_study.py` with the exact sample arithmetic mean of declared confidence $\bar{c}_b = \frac{1}{|S_b|} \sum_{i \in S_b} c_i$ across samples in each bin.
+- **Unified Calibration Statistics Engine (`compute_calibration_bins`)**: Extracted a shared, robust bin statistics utility in `src/walle/benchmark.py` that computes:
+  - Exact empirical sample confidence means.
+  - Empirical patch accuracy ($d \le 1.5$ cells).
+  - Wilson score 95% confidence intervals $[c - m, c + m]$ for binomial proportions.
+  - Empirical 90% credible region coverage.
+- **Handling of Unmodeled Credible Regions**: Verified that missions where no posterior credible region is evaluated (`credible_hit is None`, such as non-Bayesian baselines or forced timeouts without credible computation) are excluded from the credible coverage denominator, ensuring unmodeled regions are never penalized as false negatives.
+- **Handling of Forced Declarations**: Forced declarations triggered by timeout or battery depletion evaluate the agent's final posterior MAP hypothesis; low-confidence runs are accurately categorized in lower confidence bins (e.g. `[0.00, 0.50)`) rather than discarded.
+- **Paired Seed Invariant**: Verified that in benchmark evaluations, all competing agent architectures (`random`, `greedy_bearing`, `bayes_planner`) run against 100% identical mission worlds, obstacle layouts, charger locations, and initial signal generation.
+- **Detailed Calibration Audit Records**: Configured `scripts/calibration_study.py` to write `outputs/calibration_results.csv` logging per-run seeds, declared vs true coordinates, confidence values, patch hits, credible hits, and resource metrics.
+
+
